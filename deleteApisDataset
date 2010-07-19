@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.storage = "misc_apis"
+opt.host = "mysql-lan-pro"
+opt.file = nil
+
+ARGV.options {|opts|
+  opts.banner << " [dataset... dataset...]"
+  opts.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  opts.on("-f ", "--file ", String, "optional file of seq ids to delete") {|t| opt.file = t}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+storage = MySQL.new(opt.host, opt.storage, "apis", "apis_user")
+
+if (!opt.file)
+  ARGV.each {|dataset|
+    storage.deleteDataset("dataset='#{dataset}'")
+  }
+else
+  File.new(opt.file).each {|line|
+    seq_name = line.chomp
+    ARGV.each {|dataset|
+      ["classification", "tree", "annotation", "alignment", 
+       "blast", "transporter", "sequence"].each {|tbl|
+        storage.query("DELETE FROM #{tbl} WHERE dataset = '#{dataset}' AND seq_name = '#{seq_name}'")
+      }
+    }
+  }
+end

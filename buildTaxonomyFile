@@ -1,0 +1,47 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+
+ARGV.options {|opts|
+  opts.banner << " nodes.dmp names.dmp"
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size != 2)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+nodes, names = ARGV
+
+name = Hash.new
+parent = Hash.new
+rank = Hash.new
+
+File.new(nodes).each {|line|
+  id, pid, rnk = line.chomp.split("\t\|\t")
+  if (rnk == "superkingdom")
+    rnk = "kingdom" 
+  elsif (rnk == "kingdom")
+    rnk = "subkingdom"
+  end
+  rank[id.to_i] = rnk
+  parent[id.to_i] = pid.to_i
+}
+
+File.new(names).each {|line|
+  id, nm, unique, type = line.chomp.split("\t\|\t")
+  type.gsub!("\t|","")
+  name[id.to_i] = nm if type == "scientific name"
+}
+
+out = File.new("taxonomy.txt", "w")
+name.keys.sort.each {|id|
+  out.printf("%d\t%d\t%s\t%s\n", id, parent[id], name[id], rank[id])
+}
+out.close

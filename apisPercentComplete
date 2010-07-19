@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.all = false
+opt.storage = "misc_apis"
+opt.host = "mysql-lan-pro.jcvi.org"
+
+ARGV.options {|opts|
+  opts.banner << " [dataset .. dataset..]"
+  opts.on("-a", "--all", "summarize all datasets in database") {|t| opt.all = t}
+  opts.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1 && !opt.all)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+storage = MySQL.new(opt.host, opt.storage, "access", "access")
+
+if (opt.all)
+  storage.query("select dataset from dataset").each {|dataset|
+    ARGV.push(dataset[0])
+  }
+end
+
+ARGV.each {|dataset|
+  STDERR.printf("Processing %s...\n", dataset)
+  date = ""
+  storage.query("SELECT date_added FROM dataset where dataset = '#{dataset}'").each {|row|
+    date = row[0]
+  }
+  num = storage.count("sequence WHERE dataset = '#{dataset}'")
+  complete = storage.count("sequence WHERE dataset = '#{dataset}' AND processed = 1")
+  printf("%s\t%s\t%d\t%d\t%d%%\n", dataset, date, num, complete, 
+         complete*100/num)
+}

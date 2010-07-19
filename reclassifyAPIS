@@ -1,0 +1,85 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+
+all = false
+database = "combodb"
+date = "1970-01-01"
+storage = "misc_apis"
+host = "mysql-lan-pro.jcvi.org"
+exclude = nil
+f = nil
+contig = nil
+ruleMaj = false
+
+ARGV.options {|opts|
+  opts.banner << " [dataset... dataset...]"
+  opts.on("-a", "--all", "reprocess all datasets") {|all|}
+  opts.on("-c ", "--contig ", String, 
+         "only process contig supplied") {|contig|}
+  opts.on("-d ", "--database ", String, 
+         "query database (default #{database})") {|database|}
+  opts.on("-f ", "--file ", String, 
+        "read exclusion for species from csv file") {|f|} 
+  opts.on("-r", "--ruleMajority", "use majority classification") {|ruleMaj|}
+  opts.on("-s ", "--storage ", String, "storage database (default #{storage})") {|storage|}
+  opts.on("-t ", "--time ", String, "date string (year-month-day) to process after") {|date|}
+  opts.on("-h ", "--host ", String, "database host (default #{host})") {|host|}
+  opts.on("-y ", "--exclude ", String,
+	  "exclude taxonomy matching regexp from run") {|exclude|}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1 && !all)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+ex = Hash.new
+if (f)
+  CSV.foreach(f) {|row|
+    ex[row.first] = row.last
+  }
+end
+
+db = MySQL.new(host, storage, "apis", "apis_user", database)
+db.tax
+
+if (all)
+  db.query("select dataset from dataset WHERE date_added > '#{date}'").each {|dataset|
+    ARGV.push(dataset[0])
+  }
+end
+
+ARGV.each {|dataset|
+  STDERR.printf("Reclassifying %s...\n", dataset)
+  count = 0
+  phrase = "tree WHERE dataset='#{dataset}'"
+  phrase += " AND seq_name LIKE '%-#{contig}'" if (contig)
+  STDERR.printf("Counting trees....\n")
+  trees = db.count(phrase)
+  query = "SELECT seq_name, tree FROM #{phrase}"
+  first = true
+  db.query(query).each {|row|
+    if (first)
+      STDERR.printf("Processing trees....\n")
+      first = false
+    end
+    name, tree = row
+    tree = NewickTree.new(tree)
+    if (f)
+      sp = db.tax[name.split("-").last]["species"]
+      exclude = ex[sp]
+    end
+    db.createClassification(tree, name, dataset, exclude, ruleMaj)
+    count += 1
+    STDERR.printf("%4.2f%% done...\n", count*100.0/trees) if (count % 1000 == 0)
+  }
+}

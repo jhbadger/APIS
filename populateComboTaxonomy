@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+
+require 'DBwrapper'
+require 'optparse'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.all = false
+opt.host = "mysql-lan-pro"
+opt.database = "combodb"
+opt.verbose = false
+
+o = OptionParser.new
+o.banner << " species [...species..]"
+o.on("-a", "--all", "process all species (default #{opt.all})") {|opt.all|}
+o.on("-d ", "--database ", String, 
+     "database (default #{opt.database})") {|opt.database|}
+o.on("-h ", "--host ", String, 
+     "database host (default #{opt.host})") {|opt.host|}
+o.on("-v", "--verbose", 
+     "process all species (default #{opt.verbose})") {|opt.verbose|}
+begin
+  o.parse!
+rescue
+  STDERR << $!.message
+  STDERR <<  o
+  exit(1)
+end
+if (ARGV.size < 1 && !opt.all)
+  STDERR << o
+  exit(1)
+end
+
+
+database, rest = ARGV
+
+db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+
+
+tax = Hash.new
+total = db.count("contigs")
+count = 0
+oldspecies = ""
+query = "SELECT name, taxon_id, species, supergroup FROM contigs"
+if (ARGV.size > 0)
+  query += " WHERE species in ("
+  ARGV.each {|species|
+    query += "'"+species+"',"
+  }
+  query.chop!
+  query += ")"
+end
+db.query(query).each {|row|
+  name, id, species, supergroup = row
+  count += 1
+  if (oldspecies != species)
+    STDERR.printf("Processing %s...\n", species)
+  end
+  STDERR.printf("%4.2f%% done...\n", count*100.0/total) if (count % 100 == 0)
+  if (!tax[id])
+    begin
+      tax[id] = db.buildTaxFromTaxId(id, true)
+    rescue
+    end
+  end
+  if (!tax[id].nil? && tax[id].size > 5)
+    db.query("UPDATE contigs set taxonomy = '#{tax[id]}' WHERE name = '#{name}'")
+  end
+  oldspecies = species
+}
+
+db.close

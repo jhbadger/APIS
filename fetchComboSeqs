@@ -1,0 +1,100 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'dm-core'
+require 'ComboDB'
+require 'optparse'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.name = false
+opt.species = false
+opt.contig = false
+opt.taxonomy = false
+opt.dna = false
+opt.rna = false
+opt.molecule = false
+opt.file = false
+opt.database = "phylodb"
+
+
+o = OptionParser.new
+o.banner << " id...id..."
+o.on("-c", "--contig", "use contig as search id") {opt.contig = true}
+o.on("-s", "--species", "use species as search id") {opt.species = true}  
+o.on("-n", "--name", "use (exact) sequence name as search id (default)") {opt.name = true}  
+o.on("-t", "--taxonomy", "use taxonomy as search id") {opt.taxonomy = true}
+o.on("-d ", "--database ", String, 
+     "query database (default #{opt.database})") {|s| opt.database=s}
+o.on("-m", "--molecule", 
+     "return full DNA molecules of contigs") {opt.molecule = true}  
+o.on("-r", "--rRNA", "return rRNAs, not protein") {opt.rna = true}  
+o.on("-u", "--transcripts", 
+     "return coding transcripts, not proteins") {opt.dna = true}
+o.on("-f ", "--file ", String, 
+     "load IDs to search for from file") {|f| opt.file=f}  
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size <  1 && !opt.file)
+  STDERR << o
+  exit(1)
+end
+
+DataMapper.setup(:default, "mysql://apis:apis_user@mysql-lan-pro/#{opt.database}") 
+
+if (opt.file)
+  ids = []
+  File.read(opt.file).each do |line|
+    ids.push(line.split(" ").first)
+  end
+else
+  ids = ARGV
+end
+
+seqs = []
+
+if (opt.name)
+  seqs = Protein.all(:name => ids) if (!opt.dna)
+  seqs = Transcript.all(:name => ids) if (opt.dna)
+elsif (opt.species)
+  ids.each do |id|
+    Contig.all(:species.like => "%#{id}%").each do |contig|
+      if (opt.dna)
+        seqs.push(contig.transcripts)
+      elsif(opt.molecule)
+        seqs.push(contig)
+      elsif(opt.rna)
+        seqs.push(contig.rrnas)
+      else
+        seqs.push(contig.proteins)
+      end
+    end
+  end
+elsif (opt.taxonomy)
+  ids.each do |id|
+    ids.each do |id|
+      Contig.all(:species.like => "%#{id}%").each do |contig|
+        if (opt.dna)
+          seqs.push(contig.transcripts)
+        elsif(opt.molecule)
+          seqs.push(contig.seq)
+        elsif(opt.rna)
+          seqs.push(contig.rrnas)
+        else
+          seqs.push(contig.proteins)
+        end
+      end
+    end
+  end
+end
+
+seqs.flatten!
+seqs.each do |seq|
+  print seq.to_fasta
+end
+

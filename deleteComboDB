@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.database = "combodb"
+opt.host = "mysql-lan-pro"
+opt.species = false
+opt.contig = true
+opt.file = nil
+opt.taxonomy = nil
+opt.form = nil
+
+f = !ARGV.grep("-f").empty?
+ARGV.options {|opts|
+  opts.banner << " id [id...id...]"
+  opts.on("-d ", "--database ", String, 
+         "query database (default #{opt.database})") {|t| opt.database = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  opts.on("-c", "--contig", 
+	  "use contig as id (default)") {|t| opt.contig = t}
+  opts.on("-s", "--species", 
+	  "use species as id") {|t| opt.species = t} 
+  opts.on("-t", "--taxonomy", 
+	  "use taxonomy as id") {|t| opt.taxonomy = t} 
+  opts.on("-f ", "--file ", String, 
+	  "load ids from file ") {|t| opt.file = t}
+  opts.on("-y", "--form", 
+	  "use form as id") {|t| opt.form = t} 
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1 && !f)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+if (opt.file)
+  File.new(opt.file).each {|line|
+    id = line.chomp
+    ARGV.push(id)
+  }
+end
+
+db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+
+ARGV.each {|id|
+  if (opt.species)
+    db.deleteContig("species = '#{id}'")
+  elsif (opt.taxonomy)
+    db.deleteContig("taxonomy like '%#{id}%'")
+  elsif (opt.form)
+    db.deleteContig("form =  '#{id}'")
+  else
+    db.deleteContig("name = '#{id}'")
+  end
+}

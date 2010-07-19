@@ -1,0 +1,109 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+require 'bio'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.database = "combodb"
+opt.host = "mysql-lan-pro"
+opt.supergroup = ""
+
+ARGV.options {|opts|
+  opts.banner << " att pep cds ent con rRNA"
+  opts.on("-d ", "--database ", String, 
+         "query database (default #{opt.database})") {|t| opt.database = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  opts.on("-s ", "--super ", String, "supergroup assignment (default #{opt.supergroup})") {|t| opt.supergroup = t}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size != 6)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+contigs, pep, cds, ent, con, rrna = ARGV
+
+db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+db.query("INSERT INTO updated VALUES('#{Date.today.to_s}')")
+
+File.new(contigs).each {|line|
+  acc, len, org, strain, id, tax, form, proteins, rrnas, gc = line.chomp.tr("'","").split("\t")
+  if (db.count("contigs where name = '#{acc}'") == 0)
+    db.query("INSERT INTO contigs VALUES('#{acc}', '#{org}', '#{strain}', #{id}, " +
+             "'#{tax}', '', '#{opt.supergroup}', '#{form}', '')")
+    STDERR.printf("Loading contig info for %s %s...\n", acc, org)
+  end
+}
+
+oldContig = ""
+Bio::FlatFile.new(Bio::FastaFormat, File.new(pep)).each {|seq|
+  name = seq.entry_id
+  contig = name.split("-").last
+  prot = seq.seq
+  ann = seq.definition.tr("'\"\\","").split(" ", 2).last.split(" {").first
+  if (db.count("proteins where name = '#{name}'") == 0)
+    db.query("INSERT INTO proteins VALUES('#{name}', '#{contig}', '#{ann}', '#{prot}')")
+    STDERR.printf("Loading proteins for %s...\n", contig) if (contig != oldContig) 
+    oldContig = contig
+  end
+}
+
+oldContig = ""
+Bio::FlatFile.new(Bio::FastaFormat, File.new(cds)).each {|seq|
+  name = seq.entry_id
+  contig = name.split("-").last
+  tran = seq.seq.downcase
+  if (db.count("transcripts where name = '#{name}'") == 0)
+    db.query("INSERT INTO transcripts VALUES('#{name}', '#{contig}', '#{tran}')")
+    STDERR.printf("Loading transcripts for %s...\n", contig) if (contig != oldContig) 
+    oldContig = contig
+  end
+}
+
+oldContig = ""
+Bio::FlatFile.new(Bio::FastaFormat, File.new(rrna)).each {|seq|
+  name = seq.entry_id
+  contig = name.split("-").last
+  rna = seq.seq.downcase
+  ann = seq.definition.tr("'\"","").split(" ", 2).last.split(" {").first
+  if (db.count("rrnas where name = '#{name}'") == 0)
+    db.query("INSERT INTO rrnas VALUES('#{name}', '#{contig}', '#{ann}', '#{rna}')")
+    STDERR.printf("Loading rRNAs for %s...\n", contig) if (contig != oldContig) 
+    oldContig = contig
+  end
+}
+
+oldContig = ""
+File.new(ent).each {|line|
+  name, gname, start, stop, strand = line.chomp.split("\t")
+  fields = line.chomp.split("\t")
+  if (fields[4] == "1" || fields[4] == "-1")
+    name, gname, start, stop, strand = fields
+  else
+   name, start, stop, strand = fields
+  end
+  contig = name.split("-").last
+  if (db.count("geneorders where protein_name = '#{name}'") == 0)
+    db.query("INSERT INTO geneorders VALUES('#{name}', '#{contig}', #{start}, " +
+             "#{stop}, '#{strand}')")
+    STDERR.printf("Loading gene orders for %s...\n", contig) if (contig != oldContig) 
+    oldContig = contig
+  end
+}
+
+Bio::FlatFile.new(Bio::FastaFormat, File.new(con)).each {|seq|
+  name = seq.entry_id
+  chrom = seq.seq.downcase
+  db.query("UPDATE contigs SET seq='#{chrom}' WHERE name = '#{name}'")
+  STDERR.printf("Loading con for %s...\n", name) 
+}
+

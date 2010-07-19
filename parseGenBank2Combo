@@ -1,0 +1,206 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'bio'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.sep = false
+opt.tax = false
+
+ARGV.options {|opts|
+  opts.banner << " gbk-file [..gbk-file...]"
+  opts.on("-s", "--separate", 
+          "output in separate files for each accession (#{opt.sep})") {|t| opt.sep = t}
+  opts.on("-t", "--taxonomy", 
+          "use taxonomy from combodb database, not file (#{opt.tax})") {|t| opt.tax = t}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+# classify type of molecule given definition string
+def classifyMolecule(definition)
+  if (definition =~ /plasmid/i)
+    return "Plasmid"
+  elsif (definition =~ /mitochon/i) 
+    return "Mitochondria"
+  elsif (definition =~ /plastid|chloroplast/i) 
+    return "Plastid"
+  elsif (definition =~ /chromosome\s*([^\s,]+)/i ) 
+    return "Chromosome $1"
+  else
+    return "Chromosome"
+  end
+end
+
+# return sequence from genbank range
+def getSequence(seq, locations)
+  if (locations.size == 2)
+    return getSequence(seq, [locations[0]]) + getSequence(seq, [locations[1]])
+  else
+    loc = locations.first
+    if (loc.strand == 1)
+      return seq[(loc.from - 1)..(loc.to - 1)]
+    elsif (loc.strand == -1)
+      return Bio::Sequence::NA.new(seq[(loc.from - 1)..(loc.to - 1)]).complement.seq
+    else
+      STDERR.printf("Error: I don't know how to handle #{locations}\n")
+      exit(1)
+    end
+  end
+end
+
+
+pep, cds, rna, trna, ent, con = nil
+
+if (!opt.sep)
+  pep = File.new("all.pep", "w")
+  cds = File.new("all.cds", "w")
+  rna = File.new("all.rRNA", "w")
+  trna = File.new("all.tRNA", "w")
+  ent = File.new("all.ent", "w")
+  att = File.new("all.att", "w")
+  con = File.new("all.con", "w")
+end
+
+ARGV.each {|gb|
+  Bio::FlatFile.new(Bio::GenBank, File.new(gb)).each {|genome|
+    acc = genome.accession
+    acc = genome.locus.entry_id if acc == ""
+    proteins = 0
+    trnas = 0
+    rrnas = 0
+    strain = ""
+    taxonid = ""
+    dna = genome.seq
+    next if (dna.length == 0) # skip empty records
+    if (opt.sep)
+      pep = File.new(acc + ".pep", "w")
+      cds = File.new(acc + ".cds", "w")
+      rna = File.new(acc + ".rRNA", "w")
+      trna = File.new(acc + ".tRNA", "w")
+      ent = File.new(acc + ".ent", "w")
+      att = File.new(acc + ".att", "w")
+      con = File.new(acc + ".con", "w")
+    end
+    STDERR.printf("Processing %s (%s)\n", genome.organism, 
+		  acc) if (genome.organism != "")
+    # process each CDS, rRNA. tRNA
+    genome.features.each {|feature|
+      hash = feature.to_hash
+      if (hash["product"])
+        if (hash["gene"])
+          product = hash["gene"].first + " "
+        else
+          product = ""
+        end
+        product += hash["product"].first.tr(",;","")
+      end
+      locations = feature.locations
+      if (hash["locus_tag"])
+	      locus = hash["locus_tag"].first
+      elsif (hash["protein_id"])
+	      locus = hash["protein_id"].first
+      end
+      if feature.feature == "source"
+	      strain = hash["strain"].first
+        if (hash["db_xref"])
+          hash["db_xref"].each {|xref|
+            taxonid = xref.gsub("taxon:", "") if (xref =~/taxon:/)
+          }
+        else
+          taxonid = ""
+        end
+        elsif feature.feature == "CDS" # proteins
+        if (hash["db_xref"])
+          gi = hash["db_xref"].grep(/GI:/).first
+        elsif hash["locus_tag"]
+          gi = hash["locus_tag"].first
+        else
+          gi = hash["protein_id"].first
+        end
+	      next if gi.nil?
+	      key = 	header = gi.downcase.tr(":","") + "-" + acc
+	      header = key + " " + product + " {" + genome.organism + "}"
+	      seq = getSequence(dna, locations)
+	      cds.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
+	      if (hash["translation"])
+	        pep.print Bio::Sequence::AA.new(hash["translation"].first).to_fasta(header, 60)
+        else
+          pep.print seq.translate.to_fasta(header, 60)
+        end
+	      ent.print key + "\t" + locus + "\t" + locations.first.from.to_s +
+	      "\t" + locations.first.to.to_s + "\t" + 
+	      locations.first.strand.to_s + "\t" + product + "\n"
+	      proteins += 1
+      elsif feature["product"].to_s =~ /ribosomal RNA/i # rRNA
+	      key = "rRNA-" + locus + "-" + acc
+	      header = key + " " + product
+	      seq = getSequence(dna, locations)
+	      rna.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
+	      ent.print key + "\t" + locus + "\t" + locations.first.from.to_s +
+	      "\t" + locations.first.to.to_s + "\t" + 
+	      locations.first.strand.to_s + "\t" + product + "\n"
+	      rrnas += 1
+      elsif feature["product"].to_s =~ /tRNA/i # tRNA
+	      key = "tRNA-" + locus + "-" + acc
+	      header = key + " " + product
+	      seq = getSequence(dna, locations)
+	      trna.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
+	      ent.print key + "\t" + locus + "\t" + locations.first.from.to_s +
+	      "\t" + locations.first.to.to_s + "\t" + 
+	      locations.first.strand.to_s + "\t" + product + "\n"
+	      trnas += 1
+      end
+    }
+    if (opt.tax)
+      require 'DBwrapper'
+      db = MySQL.new("mysql-lan-pro", "combodb", "apis", "apis_user")
+      taxonomy = db.buildTaxFromTaxId(taxonid, true)
+      if (taxonomy.nil?)
+        STDERR.printf("No info for %d\n", taxonid)
+      end
+      db.close
+    else
+      taxonomy = genome.taxonomy.chop
+    end
+    att.print acc + "\t" + genome.length.to_s + "\t"
+    att.print genome.organism + "\t" + strain + "\t" + taxonid + "\t"
+    att.print taxonomy + "\t" + classifyMolecule(genome.definition) + "\t"
+    att.print proteins.to_s + "\t" + rrnas.to_s + "\t" + trnas.to_s + "\t"
+    gc =  (dna.count("g") + dna.count("c")) / (1.0 * dna.length)  
+    att.print sprintf("%5.2f%%\n", gc * 100)
+    header = acc + " " + genome.definition
+    con.print Bio::Sequence::AA.new(dna).to_fasta(header, 60)
+    if(opt.sep)
+      att.close
+      pep.close
+      cds.close
+      rna.close
+      trna.close
+      ent.close
+      con.close
+    end
+  }
+}
+
+if(!opt.sep)
+  att.close
+  pep.close
+  cds.close
+  rna.close
+  trna.close
+  ent.close
+  con.close
+end
+

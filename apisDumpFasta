@@ -1,0 +1,99 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'DBwrapper'
+require 'ostruct'
+
+$VERBOSE = nil
+opt = OpenStruct.new
+opt.all = false
+opt.f = false
+opt.v = false
+opt.storage = ""
+opt.host = "mysql-lan-pro"
+opt.split = false
+opt.tax = nil
+opt.ann = false
+
+o = OptionParser.new
+o.banner << " [dataset...dataset]"
+o.on("-a", "--all", "dump all datasets") {opt.all = true}
+o.on("-f ", "--file ", String, 
+        "read list of ids to search from file") {|f| opt.f = f}   
+o.on("-v", "--inverse", "return lines not matching expression") {opt.v = true}
+o.on("-s ", "--storage ", String, "storage database") {|s| opt.storage = s}
+o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
+o.on("-t ", "--taxonomy ", String, "optional taxonomy WHERE clause") {|t| opt.tax = t}
+o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
+o.on("-z", "--annotation", "include annotation") {opt.ann = true}
+
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size < 1 && !opt.all)
+  STDERR << o
+  exit(1)
+end
+
+if (opt.storage == "")
+  STDERR.printf("A storage database must be specified\n")
+  exit(1)
+end
+
+storage = MySQL.new(opt.host, opt.storage, "apis", "apis_user")
+
+
+if (opt.all)
+  storage.query("select dataset from dataset").each {|dataset|
+    ARGV.push(dataset[0])
+  }
+end
+
+seen = Hash.new  
+if (opt.f)
+  File.new(opt.f).each {|line|
+    seen[line.chomp] = true
+  }
+end
+
+
+
+ARGV.each {|dataset|
+  ann = Hash.new
+  if (opt.ann)
+    storage.query("SELECT seq_name, annotation FROM annotation WHERE dataset = '#{dataset}'").each {|row|
+      name, an = row
+      ann[name] = an
+    }
+  end
+
+  if (opt.split)
+    out = File.new(dataset + ".pep", "w")
+  else
+    out = STDOUT
+  end
+  if (opt.tax)
+    query = "SELECT sequence.seq_name, sequence FROM sequence, classification "
+    query += "WHERE sequence.dataset = '#{dataset}' AND classification.dataset ="
+    query += "sequence.dataset AND classification.seq_name = sequence.seq_name "
+    query += "AND #{opt.tax}"
+  else
+    query = "SELECT seq_name, sequence FROM sequence WHERE dataset = '#{dataset}'"
+  end
+  storage.query(query).each {|row|
+    print = true
+    print = false if (opt.f && opt.v && seen[row[0]])
+    print = false if (opt.f && !opt.v && !seen[row[0]])
+    if (print)
+      header = row[0]
+      header += " " + row[0] if (opt.ann && !ann[header].nil?)
+      out.print ">#{header}\n#{row[1].gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}"
+    end
+  }
+  out.close if (opt.split)
+}

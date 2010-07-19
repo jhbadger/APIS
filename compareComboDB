@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'apis'
+require 'ostruct'
+
+opt = OpenStruct.new
+opt.database = "combodb"
+opt.host = "mysql-lan-pro.jcvi.org"
+opt.delete = false
+opt.print = false
+
+
+ARGV.options {|opts|
+  opts.banner << " att [..att]"
+  opts.on("-d ", "--database ", String, 
+          "query database (default #{opt.database})") {|t| opt.database = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+ 
+  opts.on("-p", "--print", 
+  "print contig names of conflicting data") {|t| opt.print = t}
+  opts.on("-x", "--delete", "delete conflicting data from db") {|t| opt.delete = t}
+  begin
+    opts.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts opts
+    exit(1)
+  end
+  if (ARGV.size < 1)
+    STDERR.puts opts
+    exit(1)
+  end
+}
+
+db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+
+ARGV.each {|contigs|
+  seen = Hash.new
+  print = Hash.new
+
+  File.new(contigs).each {|line|
+    fields = line.chomp.gsub(/\\/, '\&\&').gsub(/'/, "''").split("\t")
+    name, size, species, strain, taxon_id, taxonomy, form, proteins, 
+    rrnas, trnas,  gc = fields
+    seen[name] = contigs
+    seen[species] = name
+  }
+  
+  db.query("select name, species from contigs").each {|row|
+    contig, species = row
+    if (seen[contig] || seen[species])
+      if (opt.print)
+        STDERR.printf("%s\n", contig)
+      else 
+        STDERR.printf("%s contains duplicate %s\n", seen[contig], contig) if (!print[contig])
+     end
+      db.deleteContig("name = '#{contig}'") if (opt.delete)
+      print[contig] = true
+      print[species] = true 
+    elsif (seen[species])
+      STDERR.printf("%s contains different contigs for %s\n",
+                    seen[species], species) if (!print[species])
+      db.deleteContig("species = '#{species}'") if (opt.delete)
+      print[contig] = true
+      print[species] = true
+    end
+  }
+}
