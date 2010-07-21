@@ -16,7 +16,7 @@ class Sequence
   has n, :alignments, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
   has n, :annotations, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
   has n, :blasts, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
-  has 1, :classifications, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
+  has 1, :classification, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
   has 1, :tree, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :seq_name]
   property :dataset_id, String, :field => "dataset", :length => 50, :key => true, :index => true
   property :seq_name, String, :length => 100, :key => true, :index => true
