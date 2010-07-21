@@ -1,23 +1,27 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
+require 'ostruct'
 require 'rubygems'
-require 'apis'
+require 'dm-core'
+require 'ApisDB'
 require 'gchart'
 
+opt = OpenStruct.new
+opt.all = false
+opt.level = 2
+opt.storage = "misc_apis" 
+opt.host = "mysql://access:access@mysql-lan-pro"
+opt.num = false
 
-all = false
-level = 2
-storage = "misc_apis" 
-host = "mysql-lan-pro"
-
-ARGV.options {|opts|
+ARGV.options do |opts|
   opts.banner << " [dataset .. dataset..]"
-  opts.on("-a", "--all", "make graphs for all datasets in database") {|t| all = t}
+  opts.on("-a", "--all", "make graphs for all datasets in database") {|t| opt.all = t}
   opts.on("-l ", "--level ", Integer,
-          "taxonomic level (default #{level})") {|t| level = t}
-  opts.on("-s ", "--storage ", String, "storage database (default #{storage})") {|t| storage = t}
-  opts.on("-h ", "--host ", String, "database host (default #{host})") {|t| host = t}
+          "taxonomic level (default #{opt.level})") {|t| opt.level = t}
+  opts.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  opts.on("-n", "--numbers", "include numbers on pie chart (default #{opt.num})") {opt.num = true}
   begin
     opts.parse!
   rescue
@@ -25,60 +29,63 @@ ARGV.options {|opts|
     STDERR.puts opts
     exit(1)
   end
-  if (ARGV.size < 1 && !all)
+  if (ARGV.size < 1 && !opt.all)
     STDERR.puts opts
     exit(1)
   end
-}
-
-storage = MySQL.new(host, storage, "access", "access")
-
-
-out = File.new("chart.html", "w")
-fieldNames =  ["kingdom","phylum","class","ord","family","genus","species"]
-rank = fieldNames[level]
-query = "select count(*), #{rank} from classification " 
-
-if (all)
-  storage.query("select dataset from dataset").each {|dataset|
-    ARGV.push(dataset[0])
-  }
 end
+
+DataMapper.setup(:default, opt.host + "/" + opt.storage)
+
+fieldNames =  ["kingdom","phylum","class","ord","family","genus","species"]
+rank = fieldNames[opt.level]
+out = File.new("chart_#{rank}.html", "w")
+
+if (opt.all)
+  sets = []
+  Dataset.all.each do |dataset|
+    sets.push(dataset.id)
+  end
+else
+  sets = ARGV
+end
+
 
 percents = Hash.new
 
-ARGV.each {|dataset|
+sets.each do |dataset|
   STDERR.printf("Processing %s...\n", dataset)
   counts = Hash.new
   total = 0
-  storage.query(query + "where dataset = '#{dataset}' group by #{rank}").each {|row|
-    num, taxon = row
-    next if taxon == "Undefined"
-    counts[taxon] = num.to_i
-    total += num.to_f / 100
-  }
+  # GROUP BY not supported by DataMapper, so raw SQL
+  query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
+  repository(:default).adapter.select(query).each do |row|
+    next if row["taxon"] == "Undefined"
+    counts[row["taxon"]] = row["num"]
+    total += row["num"].to_f / 100
+  end
   percents[dataset] = Hash.new
   counts["Misc"] = 0
   percents[dataset]["Misc"] = 0
   
-  counts.keys.each {|key|
+  counts.keys.each do |key|
     percents[dataset][key] = counts[key]/total if total > 0
-  }
+  end
 
   printf("\nCategory in #{dataset}, Counts, Percent\n")
-  percents[dataset].keys.sort {|x,y| percents[dataset][y] <=> percents[dataset][x]}.each {|key|
+  percents[dataset].keys.sort {|x,y| percents[dataset][y] <=> percents[dataset][x]}.each do |key|
     printf("%s,%d,%5.2f\n", key, counts[key], percents[dataset][key]) if (percents[dataset][key]> 0.0)
-  }
+  end
   
-  counts.keys.each {|key|
+  counts.keys.each do |key|
     if (percents[dataset][key] < 2 && key != "Misc")
       percents[dataset]["Misc"] += percents[dataset][key]
       counts.delete(key)
       percents[dataset].delete(key)
     end
-  }
+  end
   percents[dataset].delete("Misc") if (percents[dataset]["Misc"] < 2)  
-}
+end
 
 colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
           "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B",
@@ -92,33 +99,41 @@ colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
 colors *= 5 # provide duplicates of colors to stop running out
 
 taxa = Hash.new
-percents.keys.sort.each {|dataset|
-  percents[dataset].keys.each {|taxon|
+percents.keys.sort.each do |dataset|
+  percents[dataset].keys.each do |taxon|
     taxa[taxon] = 0 if taxa[taxon].nil?
     taxa[taxon] += percents[dataset][taxon]
-  }
-}
+  end
+end
 
 colorTaxa = Hash.new
-taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each {|taxon|
+taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each do |taxon|
   colorTaxa[taxon] = colors.shift if (colors.size > 0)
-}
+end
 
 radius = 50
 x = radius*2
 y = radius*2
 num = 0
 
-percents.keys.sort.each {|dataset|
+
+out.printf("<center><H1>#{rank.capitalize} level breakdown</H1></center><BR>\n")
+percents.keys.sort.each do |dataset|
   STDERR.printf("Drawing chart for %s...\n", dataset)
   data = percents[dataset].values
   legend = percents[dataset].keys
-  url = Gchart.pie(:data => data, :legend => legend, :width=>500, :title => dataset)
+  glegend = legend.dup
+  if (opt.num)
+    legend.size.times do |i|
+      glegend[i] = legend[i] + " " + ((100*data[i]).to_i/100.0).to_s + "%"
+    end
+  end
+  url = Gchart.pie(:data => data, :legend => glegend, :width=>500, :title => dataset)
   col = ""
-  legend.each {|key|
+  legend.each do |key|
     col += colorTaxa[key].downcase.gsub("#","") + ","
-  }
+  end
   col.chop!
   out.printf("<img src=\"%s&chco=%s\"/>\n\n", url, col)
-}
+end
 out.close
