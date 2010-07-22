@@ -2,35 +2,33 @@
 
 require 'optparse'
 require 'rubygems'
-require 'apis'
+require 'dm-core'
+require 'Newick'
 require 'ostruct'
+require 'csv'
+require 'ComboDB'
+require 'ComboDB-metadata'
+require 'ApisDB'
 
 opts = OpenStruct.new
 
 opts.all = false
-
+opts.host = "mysql://access:access@mysql-lan-pro"
 opts.storage = "misc_apis"
-opts.host = "mysql-lan-pro"
-opts.contig = nil
-opts.taxfilter = nil
-opts.notree = false
-opts.sql = false
-opts.taxid = false
-opts.table = nil
+opts.proteindb = "phylodb"
+opts.tree = false
+opts.cog = false
+opts.len = false
 
 ARGV.options {|o|
   o.banner << " [dataset .. dataset..]"
   o.on("-a", "--all", "include all datasets in database") {|t| opts.all = true}
-  o.on("-c ", "--contig ", String, 
-        "only process contig supplied") {|t| opts.contig = t}
-  o.on("-i", "--id", "include taxon id in table") {|t| opts.taxid = t}
-  o.on("-n", "--notree", "Don't include tree in file (#{opts.notree})") {|t| opts.notree = t}
-  o.on("-t ", "--taxfilter ", String, 
-        "only list taxonomy matching SQL phrase") {|t| opts.taxfilter = t}
-  o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
+  o.on("-c", "--cog", "include COG info in file (#{opts.cog})") {|t| opts.cog = t}
   o.on("-h ", "--host ", String, "database host (default #{opts.host})") {|t| opts.host = t}
-  o.on("-q", "--sql", "dump sql output") {|t| opts.sql = t}
-  o.on("-t", "--table ", String, "only dump listed tables") {|t| opts.table = t}
+  o.on("-l", "--length", "include peptide length in file (#{opts.len})") {|t| opts.len = t}
+  o.on("-p ", "--proteindb ", String, "protein database (default #{opts.proteindb})") {|t| opts.proteindb = t}
+  o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
+  o.on("-t", "--tree", "include tree in file (#{opts.tree})") {|t| opts.tree = t}
   begin
     o.parse!
   rescue
@@ -44,36 +42,8 @@ ARGV.options {|o|
   end
 }
 
-storage = MySQL.new(opts.host, opts.storage, "access", "access")
-
-tables = ["alignment", "annotation", "blast", "classification", "dataset", 
-          "sequence", "tree"]
-
-if (opts.table)
-  opts.sql = true
-  ts = []
-  opts.table.split(",").each {|tname|
-    if (tables.include?(tname))
-      ts.push(tname)
-    else
-      STDERR.printf("%s is not a valid table name\n", tname)
-      exit(1)
-    end
-  }
-  tables = ts
-end
-
-def createTax(row)
-  tax = ""
-  row.each {|field|
-    field.tr!(",;","") if !field.nil?
-    break if field.nil? || field == "Undefined"
-    tax += "; " if tax != ""
-    tax += field
-    break if field == "Mixed"
-  }
-  return tax
-end
+DataMapper.setup(:default, opts.host + "/" + opts.storage)
+DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
 
 if (opts.all)
   storage.query("select dataset from dataset").each {|dataset|
@@ -82,68 +52,33 @@ if (opts.all)
 end
 
 out = Hash.new
-if (!opts.sql)
-  printf("Seq,Dataset,Taxonomy")
-  printf(",Tax_Id") if (opts.taxid)
-  printf(",Annotation")
-  printf(",Tree") if (!opts.notree)
-  printf("\n")
-else
-  tables.each {|table|
-    out[table] = File.new(table + ".txt", "w")
-  }
-end
-ARGV.each {|dataset|
-  if (opts.sql)
-    tables.each {|table|
-      storage.query("SELECT * FROM #{table} WHERE dataset = '#{dataset}'").each {|row|
-        out[table].print row.shift
-        row.each {|field|
-          out[table].print "\t" + field.chomp
-        }
-        out[table].printf("\n")
-      }
-    }
-  else
-    query = "SELECT seq_name, "
-    query += "tree," if (!opts.notree)
-    query += "annotation, kingdom, phylum, class, ord, family, "
-    query += "genus, species FROM csvTable "
-    query += "WHERE dataset = '#{dataset}'" 
-    query += " AND seq_name LIKE '%-#{opts.contig}'" if (opts.contig)
-    query += " AND #{opts.taxfilter}" if (opts.taxfilter)
-    query += " ORDER BY seq_name"
-    storage.query(query).each {|row|
-      name = row.shift
-      tree = row.shift if (!opts.notree)
-      annotation = row.shift
-      annotation = "" if annotation.nil?
-      annotation = annotation.split(" {").first if annotation.index("{ ")
-      tree = "NO_TREE" if tree.nil?
-      tax = createTax(row)
-      taxid = nil
-      if (opts.taxid)
-        row.size.times {|i|
-          level = row[row.size - 1 - i]
-          if (!level.nil?)
-            storage.query("SELECT tax_id FROM combodb.taxonomy WHERE name='#{level}'").each {|row|
-              taxid = row[0]
-            }
-            break if taxid
-          end
-        }
-      end
-      printf("%s,%s,%s", name, dataset, tax)
-      printf(",%d", taxid) if (opts.taxid)
-      printf(",%s", annotation.tr(",","")) 
-      printf(",\"%s\"",tree.tr('"',"").chomp) if (!opts.notree)
-      printf("\n")
-    } 
-  end
-}
 
-if (opts.sql)
-  tables.each {|table|
-    out[table].close
-  }
+header = ["Seq"]
+header.push("Dataset") if ARGV.size > 1
+header.push("Length") if (opts.len)
+header.push("Taxonomy", "APIS Annotation")
+header.push("Cog", "Cog Definition") if (opts.cog)
+header.push ("Tree") if (opts.tree)
+
+print header.to_csv
+
+ARGV.each do |dataset|
+  dataset = Dataset.first(:id => dataset)
+  if (!dataset.nil?)
+    dataset.sequences.each do |seq|
+      row = []
+      row.push(seq.name)
+      row.push(dataset.id) if ARGV.size > 1
+      row.push(seq.sequence.length) if (opts.len)
+      if (!seq.tree.nil?)
+        row.push(seq.classification.to_s)
+      else
+        row.push("NO_TREE")
+      end
+      row.push(seq.annotations.first.to_s)
+      row.push(seq.cog) if (opts.cog)
+      row.push(seq.tree.to_s) if (opts.tree)
+      print row.to_csv
+    end
+  end
 end
