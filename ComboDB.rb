@@ -22,7 +22,7 @@ class Protein
   property :name, String, :length => 100, :key => true
   property :annotation, String, :length => 255
   property :taxon_id, Integer
-  property :seq, Text, :lazy => false
+  property :seq, Text
   def to_fasta
     header = "#{name} #{annotation} {#{contig.species}}" 
     return ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
@@ -33,7 +33,7 @@ class Transcript
   include DataMapper::Resource
   belongs_to :contig
   property :name, String, :length => 100, :key => true
-  property :seq, Text, :lazy => false
+  property :seq, Text
   def annotation
     return Protein.first(:name => name).annotation
   end
@@ -48,7 +48,7 @@ class Rrna
   belongs_to :contig
   property :name, String, :length => 100, :key => true
   property :annotation, String, :length => 255
-  property :seq, Text, :lazy => false
+  property :seq, Text
   def to_fasta
     header = "#{name} #{annotation} {#{contig.species}}" 
     return ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"

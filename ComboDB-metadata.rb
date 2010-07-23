@@ -33,5 +33,5 @@ class Cogdef
   storage_names[:combodb] = "cog_definitions"
   belongs_to :cog, :child_key=>[:cog_name], :parent_key=>[:name]
   property :cog_name, String, :field=> "cog", :length=>100, :key=> true
-  property :definition, Text, :lazy => false
+  property :definition, Text
 end
