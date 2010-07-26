@@ -58,7 +58,7 @@ header.push("Dataset") if ARGV.size > 1
 header.push("Length") if (opts.len)
 header.push("Taxonomy", "APIS Annotation")
 header.push("Cog", "Cog Definition") if (opts.cog)
-header.push ("Tree") if (opts.tree)
+header.push("Tree") if (opts.tree)
 
 print header.to_csv
 
