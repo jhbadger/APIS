@@ -225,7 +225,7 @@ def estimateMLBranchLengths(tree, alignFile, tmpdir)
   bClades = tree.clades(true)
   fasta2Phylip(alignFile, "#{tmpdir}/infile")
   tree.write("#{tmpdir}/intree")
-  treepuzzle = "treepuzzle infile intree"
+  treepuzzle = "puzzle infile intree"
   system("cd #{tmpdir};echo  \"y\" | #{treepuzzle} > /dev/null")
   tree = NewickTree.fromFile("#{tmpdir}/intree.tree")
   tree.reroot(tree.findNode(outgroup))
@@ -332,6 +332,28 @@ def fasta2Stockholm(stockFile, alignFile)
   stock.close
   return stockFile
 end
+
+def stockholm2Fasta(fastaFile, stockFile)
+  seqs = Hash.new
+  File.new(stockFile).each do |line|
+    if (line =~/^[A-Z|a-z|0-9]/)
+      name, data = line.chomp.split(" ")
+      if (seqs[name].nil?)
+        seqs[name] = data
+      else
+        seqs[name] += data
+      end
+    end
+  end
+  fasta = File.new(fastaFile, "w")
+  seqs.keys.each do |key|
+    fasta.print ">#{key}\n#{seqs[key].gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}"
+  end
+  fasta.close
+  return fastaFile
+end
+
+
 
 def makeQuickNJTree(treeFile, alignFile, name = nil, boot = false, 
 		    process = "")
