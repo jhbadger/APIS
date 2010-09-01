@@ -91,7 +91,7 @@ ARGV.each {|dataset|
     print = false if (opt.f && !opt.v && !seen[row[0]])
     if (print)
       header = row[0]
-      header += " " + row[0] if (opt.ann && !ann[header].nil?)
+      header += " " + ann[header] if (opt.ann && !ann[header].nil?)
       out.print ">#{header}\n#{row[1].gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}"
     end
   }
