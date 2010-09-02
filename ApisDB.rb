@@ -118,6 +118,5 @@ class Tree
   end
   def homolog
     pname = NewickTree.new(tree).relatives(seq_name).first.first.split("__").first
-    return DataMapper.repository(:combodb) {Protein.first(:name => pname)}
   end
 end
