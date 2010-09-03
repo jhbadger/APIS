@@ -20,7 +20,7 @@ class Sequence
   has 1, :tree, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
   property :dataset_id, String, :field => "dataset", :length => 50, :key => true, :index => true
   property :name, String, :field => "seq_name", :length => 100, :key => true, :index => true
-  property :sequence, Text
+  property :sequence, Text, :lazy => false
   property :processed, Boolean, :default => 0
   def cog
     if (tree.nil?)

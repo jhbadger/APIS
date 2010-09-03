@@ -25,7 +25,6 @@ o.on("-f ", "--file ", String,
 o.on("-v", "--inverse", "return lines not matching expression") {opt.v = true}
 o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
 o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
-o.on("-t ", "--taxonomy ", String, "limit to taxonomy ") {|t| opt.tax = t}
 o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
 o.on("-z", "--annotation", "include annotation") {opt.ann = true}
 
@@ -67,7 +66,6 @@ ARGV.each do |dataset|
     print = false if (opt.f && opt.v && seen[seq.name])
     print = false if (opt.f && !opt.v && !seen[seq.name])
     if (print)
-      next if (opt.tax && seq.classification.to_s !~/#{opt.tax}/)
       header = seq.name
       if (opt.ann)
         ann = seq.annotations.first(:source => "APIS")
