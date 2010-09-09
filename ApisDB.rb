@@ -176,6 +176,7 @@ class NewickTree
         acc, contig = relative.split("-")
 	      contig, rest = contig.split("__")
 	      groups = tax[contig]
+	      next if groups.nil?
         groups.size.times do |i|
           counts[i] = Hash.new if counts[i].nil?
           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
