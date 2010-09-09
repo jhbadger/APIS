@@ -118,34 +118,6 @@ class Tree
   def homolog
     pname = NewickTree.new(tree).relatives(seq_name).first.first.split("__").first
   end
-  # returns array of consensus taxonomy at each relative level of tree
-  def consensusTax(ruleMaj)
-    consensus = []
-    t = NewickTree.new(tree)
-    return  [] if (t.relatives(seq_name).nil?)
-    t.relatives(seq_name).each do |list|
-      counts = []
-      list.each do |relative|
-        acc, contig = relative.split("-")
-	      contig, rest = contig.split("__")
-	      groups = Contig.tax[contig]
-        groups.size.times do |i|
-          counts[i] = Hash.new if counts[i].nil?
-          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
-          counts[i][groups[i]] += 1
-        end
-      end
-      if (ruleMaj)
-        consensus.push(counts.majority)
-      else
-        consensus.push(counts.absolute)
-      end
-    end
-    return consensus
-  end
-  def createClassification(exclude, ruleMaj)
-    return consensusTax(ruleMaj).first.join("; ").split("; Mixed").first
-  end
 end
 
 class Array
@@ -189,5 +161,33 @@ class Array
     end
     sorted = count.keys.sort {|a, b| count[b] <=> count[a]}
     return sorted[0]
+  end
+end
+
+
+class NewickTree
+  # returns classification of node based on taxonomy
+  def createClassification(node_name, tax, exclude, ruleMaj)
+    consensus = []
+    return  [] if (relatives(node_name).nil?)
+    relatives(node_name).each do |list|
+      counts = []
+      list.each do |relative|
+        acc, contig = relative.split("-")
+	      contig, rest = contig.split("__")
+	      groups = tax[contig]
+        groups.size.times do |i|
+          counts[i] = Hash.new if counts[i].nil?
+          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+          counts[i][groups[i]] += 1
+        end
+      end
+      if (ruleMaj)
+        consensus.push(counts.majority)
+      else
+        consensus.push(counts.absolute)
+      end
+    end
+    return consensus.join("; ")
   end
 end

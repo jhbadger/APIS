@@ -39,32 +39,45 @@ ARGV.options {|o|
 DataMapper.setup(:default, opts.host + "/" + opts.storage)
 DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
 
+inList = "("
 if (opts.all)
   Dataset.all.each do |dset|
-    ARGV.push(dset.id)
+    inList += ("'" + dset.dataset_id + "',")
   end
 elsif ARGV.first.index("%")
   wild = ARGV.pop
   Dataset.all(:id.like => wild).each do |dset|
-    ARGV.push(dset.id)
-    break
+    inList += ("'" + dset.id + "',")
+  end
+else
+  ARGV.each do |dset|
+    inList += ("'" + dset + "',")
   end
 end
+
+inList.chop!
+inList += ")"
+
 
 out = Hash.new
 
 header = ["Seq"]
 header.push("Dataset")
-header.push("Original Classification", "Majority Classification")
+header.push("Absolute Classification", "Majority Classification")
 print header.to_csv
 
-trees = Tree.all(:dataset_id => ARGV)
+STDERR << "Loading Taxonomy...\n"
+tax = repository(:combodb){Contig.tax}
+STDERR << "Counting Trees...\n"
+trees = repository(:default).adapter.select("SELECT seq_name, dataset, tree FROM tree WHERE dataset IN #{inList}")
 tnum = trees.size
+STDERR << "Processing Trees....\n"
 count = 0
-trees.each do |tree|
-  cl = tree.sequence.classification.to_s
-  newcl = tree.createClassification(nil, true)
-  print [tree.seq_name, tree.dataset_id, cl, newcl].to_csv
+trees.each do |row|
+  tree = NewickTree.new(row.tree)
+  abscl = tree.createClassification(row.seq_name, tax, nil, false)
+  majcl = tree.createClassification(row.seq_name, tax, nil, true)
+  print [row.seq_name, row.dataset, abscl, majcl].to_csv
   count += 1
   STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)
 end
