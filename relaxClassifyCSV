@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'rubygems'
+require 'dm-core'
+require 'Newick'
+require 'ostruct'
+require 'csv'
+require 'ComboDB'
+require 'ComboDB-metadata'
+require 'ApisDB'
+
+opts = OpenStruct.new
+
+opts.all = false
+opts.host = "mysql://access:access@mysql-lan-pro"
+opts.storage = "misc_apis"
+opts.proteindb = "phylodb"
+
+
+ARGV.options {|o|
+  o.banner << " [dataset .. dataset..]"
+  o.on("-a", "--all", "include all datasets in database") {|t| opts.all = true}
+  o.on("-h ", "--host ", String, "database host (default #{opts.host})") {|t| opts.host = t}
+  o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
+  begin
+    o.parse!
+  rescue
+    STDERR.puts $!.message
+    STDERR.puts o
+    exit(1)
+  end
+  if (ARGV.size < 1 && !opts.all)
+    STDERR.puts o
+    exit(1)
+  end
+}
+
+DataMapper.setup(:default, opts.host + "/" + opts.storage)
+DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
+
+if (opts.all)
+  Dataset.all.each do |dset|
+    ARGV.push(dset.id)
+  end
+elsif ARGV.first.index("%")
+  wild = ARGV.pop
+  Dataset.all(:id.like => wild).each do |dset|
+    ARGV.push(dset.id)
+    break
+  end
+end
+
+out = Hash.new
+
+header = ["Seq"]
+header.push("Dataset")
+header.push("Original Classification", "Majority Classification")
+print header.to_csv
+
+trees = Tree.all(:dataset_id => ARGV)
+tnum = trees.size
+count = 0
+trees.each do |tree|
+  cl = tree.sequence.classification.to_s
+  newcl = tree.createClassification(nil, true)
+  print [tree.seq_name, tree.dataset_id, cl, newcl].to_csv
+  count += 1
+  STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)
+end

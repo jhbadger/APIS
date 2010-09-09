@@ -14,6 +14,16 @@ class Contig
     header = "#{name} [#{form}] {#{species}}" 
     return ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
   end
+  def Contig.tax
+    if (@tax.nil?)
+      @tax = Hash.new
+      repository(:combodb) {Contig.all}.each do |contig|
+        @tax[contig.species] = contig.taxonomy.split("; ")
+        @tax[contig.name] = contig.taxonomy.split("; ")
+      end
+    end
+    return @tax
+  end
 end
 
 class Protein

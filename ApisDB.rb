@@ -99,8 +99,7 @@ class Classification
   def to_s
     s = ""
     [kingdom, phylum, classname, order, family, genus, species].each do |level|
-      s += "; " if (s != "")
-      s += level if (level != "Mixed" && level != "Undefined")
+      s += (level + "; ") #if (level != "Mixed" && level != "Undefined")
     end
     return s    
   end
@@ -118,5 +117,77 @@ class Tree
   end
   def homolog
     pname = NewickTree.new(tree).relatives(seq_name).first.first.split("__").first
+  end
+  # returns array of consensus taxonomy at each relative level of tree
+  def consensusTax(ruleMaj)
+    consensus = []
+    t = NewickTree.new(tree)
+    return  [] if (t.relatives(seq_name).nil?)
+    t.relatives(seq_name).each do |list|
+      counts = []
+      list.each do |relative|
+        acc, contig = relative.split("-")
+	      contig, rest = contig.split("__")
+	      groups = Contig.tax[contig]
+        groups.size.times do |i|
+          counts[i] = Hash.new if counts[i].nil?
+          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+          counts[i][groups[i]] += 1
+        end
+      end
+      if (ruleMaj)
+        consensus.push(counts.majority)
+      else
+        consensus.push(counts.absolute)
+      end
+    end
+    return consensus
+  end
+  def createClassification(exclude, ruleMaj)
+    return consensusTax(ruleMaj).first.join("; ").split("; Mixed").first
+  end
+end
+
+class Array
+  # return majority consensus for counts array
+  def majority
+    consensus = []
+    size.times do |i|
+      total = 0.0
+      self[i].values.each{|val|total+=val}
+      name = self[i].keys.sort {|x,y| self[i][y] <=> self[i][x]}.first
+      
+      if (self[i][name]/total > 0.5)
+        consensus[i] = name
+      else
+        consensus[i] = "Mixed"
+      end
+    end
+    return consensus
+  end
+
+  # return absolute consensus for counts array
+  def absolute
+    consensus = []
+    size.times do |i|
+      if (self[i].size == 1)
+        consensus.push(self[i].keys.first)
+      else
+        consensus.push("Mixed")
+      end
+    end
+    return consensus
+  end
+  def mostCommon
+    count = Hash.new
+    self.each do |el|
+      if (count[el].nil?)
+	      count[el] = 1
+      else
+	      count[el] += 1
+      end
+    end
+    sorted = count.keys.sort {|a, b| count[b] <=> count[a]}
+    return sorted[0]
   end
 end
