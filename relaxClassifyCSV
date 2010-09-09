@@ -74,10 +74,14 @@ tnum = trees.size
 STDERR << "Processing Trees....\n"
 count = 0
 trees.each do |row|
-  tree = NewickTree.new(row.tree)
-  abscl = tree.createClassification(row.seq_name, tax, nil, false)
-  majcl = tree.createClassification(row.seq_name, tax, nil, true)
-  print [row.seq_name, row.dataset, abscl, majcl].to_csv
-  count += 1
-  STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)
+  begin
+    tree = NewickTree.new(row.tree)
+    abscl = tree.createClassification(row.seq_name, tax, nil, false)
+    majcl = tree.createClassification(row.seq_name, tax, nil, true)
+    print [row.seq_name, row.dataset, abscl, majcl].to_csv
+    count += 1
+    STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)
+  rescue
+    STDERR << "Problem processing " << row.seq_name << ":" << $! << "\n"
+  end
 end
