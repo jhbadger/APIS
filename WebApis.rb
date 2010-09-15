@@ -8,6 +8,26 @@ require 'Newick'
 require 'DBwrapper'
 
 helpers do
+  
+  # return base url
+  def base_uri
+    return ENV["RACK_BASE_URI"]
+  end
+
+  #authenicate user and password for a given dataset
+  def authenticate(db, dataset, username = nil, password = nil)
+    if (username.nil?)
+      username = session["username"]
+      password = session["password"]
+    end
+    u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+    if (u == "" || (u == username && p == password))
+      return true
+    else
+      return false
+    end
+  end
+  
   # write html out of a hash for testing purposes
   def hash_to_html(hash)
     html = ""
@@ -43,10 +63,9 @@ helpers do
   
   # displays a line for a single protein
   def seqLine(db, dataset, name, ann)
-    base = request.url.split("#{db}/#{dataset}").first
     line = ""
     ["blast", "tree", "pdf", "id_pdf", "alignment", "seq"].each {|link|
-      line += "<A HREF=\"#{base}#{db}/#{dataset}/#{name}/#{link}\">"
+      line += "<A HREF=\"#{base_uri}/#{db}/#{dataset}/#{name}/#{link}\">"
       line += "#{link}</A> "
     }
     ann, rest = ann.to_s.split(" {")
@@ -107,16 +126,47 @@ helpers do
   end
 end
 
+enable :sessions
+
+
+# login form for given db
+get "/login/:db/:dataset" do |db, dataset|
+  @title = "APIS: Automated Phylogenetic Inference System"
+  @project_name = "APIS: Automated Phylogenetic Inference System"
+  u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+  @main_content = "<H1>Login to #{dataset}</H1>"
+  @main_content += "<FORM METHOD=post ACTION=\"#{base_uri}/validate/#{db}/#{dataset}\">\n"
+  @main_content += "Username: "
+  @main_content +="<INPUT TYPE=text NAME=\"username\">\n"
+  @main_content += "Password: "
+  @main_content +="<INPUT TYPE=text NAME=\"password\">\n"
+  @main_content +="<INPUT TYPE=submit VALUE=send class=button>"
+  @main_content += "</FORM>"
+  haml :jcvi
+end
+
+# handle login info and reauthenicate
+post "/validate/:db/:dataset" do |db, dataset|
+  username = params[:username]
+  password = params[:password]
+  if (authenticate(db, dataset, username, password))
+    session["username"] = username
+    session["password"] = password
+  else
+    session["username"] = nil
+    session["password"] = nil
+  end
+  redirect "#{base_uri}/#{db}/#{dataset}"
+end
+
 # root of web app
 get "/?" do
   @title = "APIS: Automated Phylogenetic Inference System"
   @project_name = "APIS: Automated Phylogenetic Inference System"
-  base = request.url
-  base += "/" if base[base.length - 1].chr != "/"
   if (ENV["WEBTIER"] != "prod")
     @main_content = "<H1>Choose a Database</H1>"
     settings.dbs.keys.sort.each {|db|
-      @main_content += "<A HREF=\"#{base}#{db}\">#{db}</a><br>\n"
+      @main_content += "<A HREF=\"#{base_uri}/#{db}\">#{db}</a><br>\n"
     }
   else
     @main_content = "Listing disabled"
@@ -261,22 +311,23 @@ get "/:db/:dataset/:seq/alignment" do |db, dataset, seq|
   haml :jcvi
 end
 
+# breakdown list
+get "/:db/:dataset" do |db, dataset| 
+  redirect "#{base_uri}/#{db}/#{dataset}/kingdom"
+end
 
 # breakdown list
-["/:db/:dataset", "/:db/:dataset/:level"].each do |path|
-  get path do
-    db, dataset, level = params["db"], params["dataset"], params["level"]
+get "/:db/:dataset/:level" do |db, dataset, level|
+  if (authenticate(db, dataset))
     @title = "APIS: Automated Phylogenetic Inference System: #{dataset}"
     @project_name = "APIS: Automated Phylogenetic Inference System"
-    base = request.url.split("#{db}/#{dataset}").first
-    level = "kingdom" if level.nil?
     if (params["seq"] || params["ann"])
       @main_content = search(db, dataset, params)
     else
-      @main_content = "<FORM METHOD=get ACTION=\"#{base}#{db}/#{dataset}\">\n"
+      @main_content = "<FORM METHOD=get ACTION=\"#{base_uri}/#{db}/#{dataset}/#{level}\">\n"
       @main_content +="<INPUT TYPE=text NAME=\"ann\">\n"
       @main_content += "Search for description</FORM>\n"
-      @main_content += "<FORM METHOD=get ACTION=\"#{base}#{db}/#{dataset}\">\n"
+      @main_content += "<FORM METHOD=get ACTION=\"#{base_uri}/#{db}/#{dataset}/#{level}\">\n"
       @main_content +="<INPUT TYPE=text NAME=\"seq\">\n"
       @main_content += "Search for ORF number</FORM>\n"
       @main_content += "<H1>#{level.capitalize} breakdown for #{dataset}</H1>\n"
@@ -302,15 +353,15 @@ end
       @main_content += "#{processed} of #{tot} sequences analyzed (#{(processed*1000/tot)/10}%)<br>"
       @main_content += "#{total} of #{tot} sequences with trees (#{(total*1000/tot)/10}%)<br><br>"
       ["kingdom", "phylum", "class", "ord", "family", "genus", "species"].each {|tax|
-        @main_content += "<A HREF=\"#{base}#{db}/#{dataset}/#{tax}\">#{tax}</a>\n"
+        @main_content += "<A HREF=\"#{base_uri}/#{db}/#{dataset}/#{tax}\">#{tax}</a>\n"
       }
       @main_content += "<p>\n"
       percents = Hash.new
       counts.keys.sort {|x,y| counts[y] <=> counts[x]}.each {|key|
         percents[key] = counts[key]*100.0/total
         @main_content += sprintf("%7d (%3.1f%%)", counts[key], percents[key])
-        @main_content += sprintf("<A HREF=\"%s%s/%s/%s/%s\">%s</a><br>\n",
-                        base, db, dataset, level, key.gsub(" ","_"),  key)
+        @main_content += sprintf("<A HREF=\"%s/%s/%s/%s/%s\">%s</a><br>\n",
+        base_uri, db, dataset, level, key.gsub(" ","_"),  key)
       }
       @main_content += "</TD><TD VALIGN=\"top\">\n"
       @main_content += pie(percents)
@@ -318,7 +369,9 @@ end
     end
     settings.dbs[db].close
     haml :jcvi
-  end  
+  else
+    redirect "#{base_uri}/login/#{db}/#{dataset}"
+  end
 end
 
 # details list
@@ -347,6 +400,7 @@ get  "/:db/:dataset/:level/:group" do |db, dataset, level, group|
   settings.dbs[db].close
   haml :jcvi
 end
+
 
 
 

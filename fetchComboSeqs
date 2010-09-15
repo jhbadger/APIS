@@ -49,7 +49,7 @@ DataMapper.setup(:default, "mysql://apis:apis_user@mysql-lan-pro/#{opt.database}
 
 if (opt.file)
   ids = []
-  File.read(opt.file).each do |line|
+  File.new(opt.file).each do |line|
     ids.push(line.split(" ").first)
   end
 else
