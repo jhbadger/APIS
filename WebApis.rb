@@ -167,14 +167,10 @@ end
 get "/?" do
   @title = "APIS: Automated Phylogenetic Inference System"
   @project_name = "APIS: Automated Phylogenetic Inference System"
-  if (ENV["WEBTIER"] != "prod")
-    @main_content = "<H1>Choose a Database</H1>"
-    settings.dbs.keys.sort.each {|db|
-      @main_content += "<A HREF=\"#{base_uri}/#{db}\">#{db}</a><br>\n"
-    }
-  else
-    @main_content = "Listing disabled"
-  end
+  @main_content = "<H1>Choose a Database</H1>"
+  settings.dbs.keys.sort.each {|db|
+    @main_content += "<A HREF=\"#{base_uri}/#{db}\">#{db}</a><br>\n"
+  }
   haml :jcvi
 end
 

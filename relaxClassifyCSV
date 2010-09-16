@@ -42,7 +42,7 @@ DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
 inList = "("
 if (opts.all)
   Dataset.all.each do |dset|
-    inList += ("'" + dset.dataset_id + "',")
+    inList += ("'" + dset.id + "',")
   end
 elsif ARGV.first.index("%")
   wild = ARGV.pop
