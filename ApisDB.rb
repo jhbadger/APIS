@@ -27,7 +27,7 @@ class Sequence
       return ""
     else
       homolog = tree.homolog
-      cogs = DataMapper.repository(:combodb) {homolog.blastmatches.cogs}
+      cogs = DataMapper.repository(:combodb) {Protein.first(:name => homolog).blastmatches.cogs}
       return cogs.first.to_s
     end
   end

@@ -187,13 +187,13 @@ get  "/:db" do |db|
     @main_content += "<TD><A HREF=\"#{db}?sort=date_added\">Date</A></TD>"
     params["sort"] = "dataset" if params["sort"].nil?
     @main_content += "<TD><A HREF=\"#{db}?sort=database_used\">Database</A></TD></TR>\n"
-    if (db == "yellowstonelake_apis" || db == "synmeta_apis" || db == "gosi_apis" || db == "misc_apis")
-      query = "SELECT dataset, owner, dataset, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
+    if (db == "yellowstonelake_apis" || db == "synmeta_apis" || db == "gosi_apis")
+      query = "SELECT dataset, owner, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
     else
-      query = "SELECT dataset, owner, dataset.group, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
+      query = "SELECT dataset, owner, date_added, database_used, dataset.group FROM dataset ORDER BY #{params["sort"]}"
     end
     settings.dbs[db].query(query).each {|row|
-      dataset, owner, group, date, database = row
+      dataset, owner, date, database, group = row
       @main_content += "<TR>"
       @main_content += "<TD><A HREF=\"#{db}/#{dataset}\">#{dataset}</a><br></TD>"
       if (!database.nil?)
