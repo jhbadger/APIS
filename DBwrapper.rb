@@ -370,9 +370,11 @@ class DBwrapper
   end
   
   # create dataset if it doesn't exist
-  def createDataset(dataset, owner, date, database, comments = "")
+  def createDataset(dataset, owner, date, database, comments = "", group = "",
+                    username = "", password = "")
     if (!exists?("dataset where dataset='#{dataset}'"))
-      insert("dataset", [[dataset, owner, date, database, comments]])
+      insert("dataset", [[dataset, owner, date, database, comments, group,
+                          username, password]])
     end
   end
   

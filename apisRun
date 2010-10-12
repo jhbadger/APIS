@@ -29,6 +29,7 @@ opt.storage = ""
 opt.clear = false
 opt.skipBlast = false
 opt.gblocks = false
+opt.timelogic = false
 
 $VERBOSE = nil
 
@@ -61,6 +62,7 @@ o.on("-r", "--ruleMajority", "use majority classification") {opt.ruleMaj = true}
 o.on("-s ", "--storage ", String, "storage database") {|s| opt.storage = s}
 o.on("-t ", "--maxTree ", Integer, 
      "max number of seqs in tree (default #{opt.maxTree})") {|t| opt.maxTree = t}
+o.on(nil, "--timelogic", "use Timelogic Server (default #{opt.timelogic})") {opt.timelogic = true}
 o.on("-x", "--skipBlast", 
      "skip blast step (default #{opt.skipBlast})") {opt.skipBlast = true}
 o.on("-y ", "--exclude ", String,
@@ -100,7 +102,9 @@ ARGV.each {|prot|
   }
   storage.createDataset(dataset, ENV["USER"], Date.today.to_s, database)
   storage.loadPeptides(prot, dataset, opt.include)
-
+  if (opt.timelogic)
+    runTimeLogic(prot, storage, dataset, opt)
+  end
   if (opt.local)
     Bio::FlatFile.new(Bio::FastaFormat, File.new(prot)).each {|seq|
       processPep(storage, seq, dataset, opt)

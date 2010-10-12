@@ -224,6 +224,41 @@ def processPep(storage, seq, dataset, opt)
   end
 end
 
+
+# runs blast job on TimeLogic Server
+def runTimeLogic(prot, storage, dataset, opt)
+  if (storage.count("blast where dataset = '#{dataset}'") == 0)
+    STDERR.printf("Currently creating blast on Timelogic Server...\n")
+    STDERR.flush
+    command = "dc_run -parameters tera-blastp "
+    command += "-query " + prot + " "
+    command += "-database " + File.basename(storage.blastdb, ".pep") + " "
+    command += "-threshold significance=#{opt.evalue} "
+    command += "-max_alignments #{opt.maxHits} "
+    command += "-output_format tab "
+    command += "-field querylocus targetlocus targetdescription targetlength "
+    command += "querystart queryend targetstart targetend percentalignment "
+    command += "simpercentalignment score significance"
+    system("#{command} > #{prot}.blast")
+    brows = []
+    oldQuery = nil
+    File.new(prot + ".blast").each do |line|
+      query, target, desc, tlen, qstart, qend, 
+        tstart, tend, ident, pos, score, sig = line.chomp.split("\t")
+      if (!oldQuery.nil? && query != oldQuery)
+        storage.insert("blast", brows) if brows.size > 0
+        brows = []
+      end
+      brows.push([query, dataset, target, desc, 
+        tlen, qstart, qend, tstart, tend, 
+        ident, pos, score, sig])
+    end
+    storage.insert("blast", brows) if brows.size > 0
+    storage.close
+    File.unlink(prot + ".blast")
+  end
+end
+
 # split prot into chunks and run on grid
 def runGridApis(storage, dataset, opt)
   if (opt.project.nil?)
