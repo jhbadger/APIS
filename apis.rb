@@ -240,19 +240,24 @@ def runTimeLogic(prot, storage, dataset, opt)
     command += "-field querylocus targetlocus targetdescription targetlength "
     command += "querystart queryend targetstart targetend percentalignment "
     command += "simpercentalignment score significance"
-    system("#{command} > #{prot}.blast")
+    system("#{command} > #{prot}.blast") if (!File.exists?(prot + ".blast"))
     brows = []
     oldQuery = nil
+    count = 0
+    STDERR.printf("Loading Timelogic output...\n")
     File.new(prot + ".blast").each do |line|
       query, target, desc, tlen, qstart, qend, 
         tstart, tend, ident, pos, score, sig = line.chomp.split("\t")
       if (!oldQuery.nil? && query != oldQuery)
         storage.insert("blast", brows) if brows.size > 0
         brows = []
+        count += 1
+        STDERR.printf("Loading blast for sequence %d...\n", count) if count % 1000 == 0
       end
       brows.push([query, dataset, target, desc, 
-        tlen, qstart, qend, tstart, tend, 
-        ident, pos, score, sig])
+        tlen.to_i, qstart.to_i, qend.to_i, tstart.to_i, tend.to_i, 
+        ident.to_i, pos.to_i, score.to_i, sig.to_f]) if ident.to_i > 0
+    oldQuery = query
     end
     storage.insert("blast", brows) if brows.size > 0
     storage.close
@@ -290,7 +295,7 @@ def runGridApis(storage, dataset, opt)
   cmd += "-d #{opt.database} "
   cmd += "-g " if (opt.gblocks)
   cmd += "-s #{opt.storage} "
-  cmd += "-x " if (opt.skipBlast)
+  cmd += "-x " if (opt.skipBlast || opt.timelogic)
   cmd += "-r " if (opt.ruleMaj)
   cmd += "-y '#{opt.exclude}' " if (opt.exclude)
   cmd += "--erase -l -m #{opt.maxHits} -e #{opt.evalue} -f #{opt.coverage} "

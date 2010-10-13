@@ -10,7 +10,7 @@ require 'ostruct'
 opt = OpenStruct.new
 
 opt.annotate = false
-opt.maxHits = 100
+opt.maxHits = 50
 opt.maxTree = 50
 opt.local = false
 opt.evalue = 1e-10
