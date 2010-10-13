@@ -242,22 +242,20 @@ def runTimeLogic(prot, storage, dataset, opt)
     command += "simpercentalignment score significance"
     system("#{command} > #{prot}.blast") if (!File.exists?(prot + ".blast"))
     brows = []
-    oldQuery = nil
     count = 0
     STDERR.printf("Loading Timelogic output...\n")
     File.new(prot + ".blast").each do |line|
       query, target, desc, tlen, qstart, qend, 
         tstart, tend, ident, pos, score, sig = line.chomp.split("\t")
-      if (!oldQuery.nil? && query != oldQuery)
-        storage.insert("blast", brows) if brows.size > 0
+      count += 1
+      if (count % 1000 == 0)
+        storage.insert("blast", brows)
         brows = []
-        count += 1
-        STDERR.printf("Loading blast for sequence %d...\n", count) if count % 1000 == 0
+        STDERR.printf("Loading blast for sequence %d...\n", count)
       end
       brows.push([query, dataset, target, desc, 
         tlen.to_i, qstart.to_i, qend.to_i, tstart.to_i, tend.to_i, 
         ident.to_i, pos.to_i, score.to_i, sig.to_f]) if ident.to_i > 0
-    oldQuery = query
     end
     storage.insert("blast", brows) if brows.size > 0
     storage.close
