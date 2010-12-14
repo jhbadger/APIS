@@ -133,10 +133,14 @@ ARGV.each do |dataset|
     next if (opts.file && !printID[row[0]])
     row = row.to_a
     tree = row.pop
-    newick = NewickTree.new(tree) if (!tree.nil? && (opts.boot || opts.relax))
+    begin
+      newick = NewickTree.new(tree) if (!tree.nil? && (opts.boot || opts.relax))
+    rescue
+      newick = nil
+    end
     tax, tid = summarizeClass(row[4..10], taxID)
     if (opts.relax)
-      if (tree.nil?)
+      if (tree.nil? || newick.nil?)
         rtax = ""
         rtid = nil
       else
@@ -148,7 +152,7 @@ ARGV.each do |dataset|
       row[4..10] = [tax, tid]
     end
     if (opts.boot)
-      if (tree.nil?)
+      if (tree.nil? || newick.nil?)
         row.push(nil)
       else
         row.push(newick.findNode(row[0]).parent.name)
