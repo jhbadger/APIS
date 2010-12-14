@@ -189,6 +189,6 @@ class NewickTree
         consensus.push(counts.absolute)
       end
     end
-    return consensus.first.join("; ")
+    return consensus.first
   end
 end

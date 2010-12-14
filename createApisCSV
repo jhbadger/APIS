@@ -7,7 +7,6 @@ require 'Newick'
 require 'ostruct'
 require 'fastercsv'
 require 'ComboDB'
-require 'ComboDB-metadata'
 require 'ApisDB'
 
 opts = OpenStruct.new
@@ -17,27 +16,33 @@ opts.host = "mysql://access:access@mysql-lan-pro"
 opts.storage = "misc_apis"
 opts.proteindb = "phylodb"
 opts.tree = false
-opts.cog = false
-opts.len = false
+opts.boot = false
+opts.cut = false
+opts.exp = false
+opts.file = false
+opts.relax = false
 
 ARGV.options {|o|
   o.banner << " [dataset .. dataset..]"
-  o.on("-a", "--all", "include all datasets in database") {|t| opts.all = true}
-  o.on("-c", "--cog", "include COG info in file (#{opts.cog})") {|t| opts.cog = t}
-  o.on("-h ", "--host ", String, "database host (default #{opts.host})") {|t| opts.host = t}
-  o.on("-l", "--length", "include peptide length in file (#{opts.len})") {|t| opts.len = t}
+  o.on("-a", "--all", "include all datasets in database (#{opts.all})") {|t| opts.all = true}
+  o.on("-b", "--bootstrap", "include bootstrap value (#{opts.boot})") {|t| opts.boot = t}
+  o.on("-c", "--cut", "separate file per dataset (#{opts.cut})") {|t| opts.cut = true}
+  o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opts.exp = t}
+  o.on("-f ", "--file ", String, "only include ids from file") {|t| opts.file = t}
+  o.on("-h ", "--host ", String, "database host (#{opts.host})") {|t| opts.host = t}
   o.on("-p ", "--proteindb ", String, "protein database (default #{opts.proteindb})") {|t| opts.proteindb = t}
+  o.on("-r", "--relax", "relaxed classification (#{opts.relax})") {|t| opts.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opts.tree})") {|t| opts.tree = t}
   begin
     o.parse!
   rescue
-    STDERR.puts $!.message
-    STDERR.puts o
+    STDERR << $!.message << "\n"
+    STDERR << o 
     exit(1)
   end
-  if (ARGV.size < 1 && !opts.all)
-    STDERR.puts o
+  if (ARGV.size < 1 && (!opts.all && !opts.exp))
+    STDERR << o
     exit(1)
   end
 }
@@ -45,40 +50,114 @@ ARGV.options {|o|
 DataMapper.setup(:default, opts.host + "/" + opts.storage)
 DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
 
-if (opts.all)
-  storage.query("select dataset from dataset").each {|dataset|
-    ARGV.push(dataset[0])
-  }
+if (opts.all || opts.exp)
+  repository(:default).adapter.select("select dataset from dataset").each do |dataset|
+    ARGV.push(dataset) if (opts.exp.nil? || dataset =~/#{opts.exp}/)
+  end
 end
+
 
 out = Hash.new
 
-header = ["Seq"]
-header.push("Dataset") if ARGV.size > 1
-header.push("Length") if (opts.len)
-header.push("Taxonomy", "APIS Annotation")
-header.push("Cog", "Cog Definition") if (opts.cog)
+header = ["Seq Name", "Dataset", "Length", "Annotation", "Standard Classification", "Standard Tax Id"]
+header.push("Relaxed Classification", "Relaxed Tax Id") if opts.relax
+header.push("Bootstrap") if (opts.boot)
 header.push("Tree") if (opts.tree)
 
-print header.to_csv
+if (opts.tree || opts.relax)
+  STDERR << "Loading Taxonomy...\n"
+  taxdb = repository(:combodb){Contig.tax}
+else
+  taxdb = nil
+end
 
-ARGV.each do |dataset|
-  dataset = Dataset.first(:id => dataset)
-  if (!dataset.nil?)
-    dataset.sequences.each do |seq|
-      row = []
-      row.push(seq.name)
-      row.push(dataset.id) if ARGV.size > 1
-      row.push(seq.sequence.length) if (opts.len)
-      if (!seq.tree.nil?)
-        row.push(seq.classification.to_s)
-      else
-        row.push("NO_TREE")
-      end
-      row.push(seq.annotations.first.to_s)
-      row.push(seq.cog) if (opts.cog)
-      row.push(seq.tree.to_s) if (opts.tree)
-      print row.to_csv
+def summarizeClass(tax, taxID)
+  t = ""
+  tid = nil
+  goodRank = ""
+  tax.each do |rank|
+    if (rank !="Undefined" && !rank.nil?)
+      t += "; " if t != ""
+      t += rank
+      break if rank == "Mixed"
     end
+    goodRank = rank
+  end
+  t = "NO_TREE" if t == ""
+  if (!taxID[goodRank] && goodRank != "")
+    tid = repository(:combodb).adapter.select("select ncbi_taxon_id from phylodb_annotation.taxon, phylodb_annotation.taxon_name " + 
+      "where name = '#{goodRank}' and phylodb_annotation.taxon.taxon_id = phylodb_annotation.taxon_name .taxon_id limit 1")
+    taxID[goodRank] = tid 
+  end
+  return t, taxID[goodRank]
+end
+
+
+
+query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}')"
+STDERR << "Counting sequences...\n"
+num = repository(:default).adapter.select(query).first
+milestone = num / 200.0
+taxID = Hash.new
+printID = Hash.new
+
+if (opts.file)
+  STDERR << "Loading file of ids...\n"
+  File.new(opts.file).each do |line|
+    id, rest = line.chomp.split(" ")
+    printID[id] = true
   end
 end
+
+file = STDOUT
+file << header.to_csv if (!opts.cut)
+
+count = 0
+STDERR << "Writing Spreadsheet...\n"
+ARGV.each do |dataset|
+  if (opts.cut)
+    file.close if file != STDOUT
+    file = File.new(dataset + ".csv", "w")
+    file << header.to_csv
+  end
+  query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
+  query += "kingdom, phylum, class, ord, family, genus, species, tree FROM sequence "
+  query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
+  query += "AND sequence.dataset = classification.dataset " 
+  query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
+  query += "AND sequence.dataset = tree.dataset " 
+  query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
+  query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
+  query += "where sequence.dataset='#{dataset}'"
+  repository(:default).adapter.select(query).each do |row|
+    next if (opts.file && !printID[row[0]])
+    row = row.to_a
+    tree = row.pop
+    newick = NewickTree.new(tree) if (!tree.nil? && (opts.boot || opts.relax))
+    tax, tid = summarizeClass(row[4..10], taxID)
+    if (opts.relax)
+      if (tree.nil?)
+        rtax = ""
+        rtid = nil
+      else
+        relax = newick.createClassification(row[0], taxdb, nil, true)
+        rtax, rtid = summarizeClass(relax, taxID)
+      end
+      row[4..10] = [tax, tid, rtax, rtid]
+    else
+      row[4..10] = [tax, tid]
+    end
+    if (opts.boot)
+      if (tree.nil?)
+        row.push(nil)
+      else
+        row.push(newick.findNode(row[0]).parent.name)
+      end
+    end
+    row.push(tree) if (opts.tree)
+    file << row.to_csv
+    count += 1
+    STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
+  end
+end
+file.close if file != STDOUT
