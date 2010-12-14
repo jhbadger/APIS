@@ -18,6 +18,7 @@ opts.proteindb = "phylodb"
 opts.tree = false
 opts.boot = false
 opts.cut = false
+opts.delim = false
 opts.exp = false
 opts.file = false
 opts.relax = false
@@ -27,6 +28,7 @@ ARGV.options {|o|
   o.on("-a", "--all", "include all datasets in database (#{opts.all})") {|t| opts.all = true}
   o.on("-b", "--bootstrap", "include bootstrap value (#{opts.boot})") {|t| opts.boot = t}
   o.on("-c", "--cut", "separate file per dataset (#{opts.cut})") {|t| opts.cut = true}
+  o.on("-d", "--delimim-tab", "use tab delimiter (#{opts.delim})") {|t| opts.delim = true}
   o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opts.exp = t}
   o.on("-f ", "--file ", String, "only include ids from file") {|t| opts.file = t}
   o.on("-h ", "--host ", String, "database host (#{opts.host})") {|t| opts.host = t}
@@ -56,6 +58,11 @@ if (opts.all || opts.exp)
   end
 end
 
+if (opts.delim)
+  opts.delim = "\t"
+else
+  opts.delim = ","
+end
 
 out = Hash.new
 
@@ -110,7 +117,7 @@ if (opts.file)
 end
 
 file = STDOUT
-file << header.to_csv if (!opts.cut)
+file << header.to_csv({:col_sep=>opts.delim}) if (!opts.cut)
 
 count = 0
 STDERR << "Writing Spreadsheet...\n"
@@ -118,7 +125,7 @@ ARGV.each do |dataset|
   if (opts.cut)
     file.close if file != STDOUT
     file = File.new(dataset + ".csv", "w")
-    file << header.to_csv
+    file << header.to_csv({:col_sep=>opts.delim})
   end
   query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
   query += "kingdom, phylum, class, ord, family, genus, species, tree FROM sequence "
@@ -159,7 +166,7 @@ ARGV.each do |dataset|
       end
     end
     row.push(tree) if (opts.tree)
-    file << row.to_csv
+    file << row.to_csv({:col_sep=>opts.delim})
     count += 1
     STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
   end
