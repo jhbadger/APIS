@@ -120,18 +120,18 @@ end
 
 file = STDOUT
 file << header.to_csv({:col_sep=>opts.delim}) if (!opts.cut)
-
+ext = ".csv"
+ext = ".tab" if (opts.delim)
 count = 0
 STDERR << "Writing Spreadsheet...\n"
 ARGV.each do |dataset|
   if (opts.cut)
     file.close if file != STDOUT
-    file = File.new(dataset + ".csv", "w")
+    file = File.new(dataset + ext, "w")
     file << header.to_csv({:col_sep=>opts.delim})
   end
   query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
   query += "kingdom, phylum, class, ord, family, genus, species, tree"
-  query += ", filtered" if (opts.schmidt)
   query += " FROM sequence "
   query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
   query += "AND sequence.dataset = classification.dataset " 
@@ -145,37 +145,39 @@ ARGV.each do |dataset|
   query += " LIMIT #{opts.limit}" if (opts.limit)
   repository(:default).adapter.select(query).each do |row|
     next if (opts.file && !printID[row[0]])
-    row = row.to_a
-    tree = row.pop
+    list = row.to_a
+    tree = list.pop
     begin
       newick = NewickTree.new(tree) if (!tree.nil? && (opts.boot || opts.relax))
     rescue
       newick = nil
     end
-    tax, tid = summarizeClass(row[4..10])
+    tax, tid = summarizeClass(list[4..10])
     if (opts.relax)
       if (tree.nil? || newick.nil?)
         rtax = ""
         rtid = nil
       else
-        relax = newick.createClassification(row[0], taxdb, nil, true)
+        relax = newick.createClassification(list[0], taxdb, nil, true)
         rtax, rtid = summarizeClass(relax)
       end
-      row[4..10] = [tax, tid, rtax, rtid]
+      list[4..10] = [tax, tid, rtax, rtid]
     else
-      row[4..10] = [tax, tid]
+      list[4..10] = [tax, tid]
     end
     if (opts.boot)
       if (tree.nil? || newick.nil?)
-        row.push(nil)
+        list.push(nil)
       else
-        row.push(newick.findNode(row[0]).parent.name)
+        list.push(newick.findNode(row[0]).parent.name)
       end
     end
-    row.push(tree) if (opts.tree)
-    file << row.to_csv({:col_sep=>opts.delim})
+    list.push(tree) if (opts.tree)
+    file << list.to_csv({:col_sep=>opts.delim})
     count += 1
     STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
+    row = nil
+    list = nil
   end
 end
 file.close if file != STDOUT
