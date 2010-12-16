@@ -21,21 +21,25 @@ opts.cut = false
 opts.delim = false
 opts.exp = false
 opts.file = false
+opts.schmidt = false
 opts.relax = false
+opts.limit = false
 
 ARGV.options {|o|
   o.banner << " [dataset .. dataset..]"
   o.on("-a", "--all", "include all datasets in database (#{opts.all})") {|t| opts.all = true}
   o.on("-b", "--bootstrap", "include bootstrap value (#{opts.boot})") {|t| opts.boot = t}
   o.on("-c", "--cut", "separate file per dataset (#{opts.cut})") {|t| opts.cut = true}
-  o.on("-d", "--delimim-tab", "use tab delimiter (#{opts.delim})") {|t| opts.delim = true}
+  o.on("-d", "--delim-tab", "use tab delimiter (#{opts.delim})") {|t| opts.delim = true}
   o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opts.exp = t}
   o.on("-f ", "--file ", String, "only include ids from file") {|t| opts.file = t}
   o.on("-h ", "--host ", String, "database host (#{opts.host})") {|t| opts.host = t}
+  o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opts.limit = t}
   o.on("-p ", "--proteindb ", String, "protein database (default #{opts.proteindb})") {|t| opts.proteindb = t}
   o.on("-r", "--relax", "relaxed classification (#{opts.relax})") {|t| opts.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opts.tree})") {|t| opts.tree = t}
+   o.on("-z", "--filtered", "only include schmidt filtered (#{opts.schmidt})") {|t| opts.schmidt = t}
   begin
     o.parse!
   rescue
@@ -78,7 +82,7 @@ else
   taxdb = nil
 end
 
-def summarizeClass(tax, taxID)
+def summarizeClass(tax)
   t = ""
   tid = nil
   goodRank = ""
@@ -91,12 +95,11 @@ def summarizeClass(tax, taxID)
     goodRank = rank
   end
   t = "NO_TREE" if t == ""
-  if (!taxID[goodRank] && goodRank != "")
+  if (goodRank != "")
     tid = repository(:combodb).adapter.select("select ncbi_taxon_id from phylodb_annotation.taxon, phylodb_annotation.taxon_name " + 
       "where name = '#{goodRank}' and phylodb_annotation.taxon.taxon_id = phylodb_annotation.taxon_name .taxon_id limit 1")
-    taxID[goodRank] = tid 
   end
-  return t, taxID[goodRank]
+  return t, tid
 end
 
 
@@ -105,7 +108,6 @@ query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}'
 STDERR << "Counting sequences...\n"
 num = repository(:default).adapter.select(query).first
 milestone = num / 200.0
-taxID = Hash.new
 printID = Hash.new
 
 if (opts.file)
@@ -128,14 +130,19 @@ ARGV.each do |dataset|
     file << header.to_csv({:col_sep=>opts.delim})
   end
   query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
-  query += "kingdom, phylum, class, ord, family, genus, species, tree FROM sequence "
+  query += "kingdom, phylum, class, ord, family, genus, species, tree"
+  query += ", filtered" if (opts.schmidt)
+  query += " FROM sequence "
   query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
   query += "AND sequence.dataset = classification.dataset " 
   query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
   query += "AND sequence.dataset = tree.dataset " 
   query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
   query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
-  query += "where sequence.dataset='#{dataset}'"
+  query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opts.schmidt)
+  query += "WHERE sequence.dataset='#{dataset}'"
+  query += " AND filtered = 1 " if (opts.schmidt)
+  query += " LIMIT #{opts.limit}" if (opts.limit)
   repository(:default).adapter.select(query).each do |row|
     next if (opts.file && !printID[row[0]])
     row = row.to_a
@@ -145,14 +152,14 @@ ARGV.each do |dataset|
     rescue
       newick = nil
     end
-    tax, tid = summarizeClass(row[4..10], taxID)
+    tax, tid = summarizeClass(row[4..10])
     if (opts.relax)
       if (tree.nil? || newick.nil?)
         rtax = ""
         rtid = nil
       else
         relax = newick.createClassification(row[0], taxdb, nil, true)
-        rtax, rtid = summarizeClass(relax, taxID)
+        rtax, rtid = summarizeClass(relax)
       end
       row[4..10] = [tax, tid, rtax, rtid]
     else
