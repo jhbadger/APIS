@@ -103,6 +103,10 @@ def summarizeClass(tax)
 end
 
 
+exist = Dir.glob("*.csv") + Dir.glob("*.tab")
+exist = exist.collect{|x| x.gsub(".csv","").gsub(".tab","")}
+ARGV = ARGV - exist
+
 
 query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}')"
 STDERR << "Counting sequences...\n"
