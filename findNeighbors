@@ -1,0 +1,63 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'dm-core'
+require 'Newick'
+require 'optparse'
+require 'ApisDB'
+require 'ComboDB'
+require 'fastercsv'
+require 'ostruct'
+
+opt = OpenStruct.new
+
+opt.host = "mysql://jbadger:plankton@mysql-lan-pro"
+opt.database = "phylodb"
+opt.storage = "misc_apis"
+
+o = OptionParser.new
+o.banner << " dataset [dataset...]"
+o.on("-d ", "--database ", String, 
+     "query database (default #{opt.database})") {|d| opt.database = d}
+o.on("-h ", "--host ", String, 
+     "database host (default #{opt.host})") {|h| opt.host = h}
+o.on("-s ", "--storage ", String, 
+     "storage database (default #{opt.storage})") {|s| opt.storage = s}
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size < 1)
+  STDERR << o
+  exit(1)
+end
+
+
+DataMapper.setup(:default, opt.host + "/" + opt.storage)
+DataMapper.setup(:combodb, opt.host + "/" + opt.database)
+
+ARGV.each do |dataset|
+  repository(:default).adapter.select("SELECT classification.seq_name, tree, kingdom FROM tree, classification WHERE tree.dataset = '#{dataset}' AND classification.dataset = tree.dataset AND tree.seq_name = classification.seq_name").each do |tree|
+    begin
+      newick =  NewickTree.new(tree.tree)
+    rescue
+      STDERR << "Cannot parse tree for #{tree.seq_name}...\n"
+      next
+    end
+    neighbor = newick.relatives(tree.seq_name).first.first
+    id, species = neighbor.split("__")
+    data = repository(:default).adapter.select("SELECT * FROM phylodb_annotation.blast, phylodb_annotation.cog_proteins, phylodb_annotation.cog_definitions where target = 'cog' AND query = '#{id}' AND hit=protein AND cog_proteins.cog = cog_definitions.cog")
+    datum = data.first
+    if (datum.nil?)
+      cog = ""
+      definition = ""
+    else
+      cog = datum["cog"]
+      definition = datum["definition"]
+    end
+    print tree.seq_name + "\t" + dataset + "\t" + tree.kingdom + "\t" + cog + "\t" + definition + "\n"
+  end
+end
