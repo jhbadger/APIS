@@ -34,7 +34,7 @@ end
 
 database, rest = ARGV
 
-db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
 
 
 tax = Hash.new

@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'ostruct'
 require 'apis'
 
@@ -35,7 +34,7 @@ ARGV.options {|o|
   end
 }
 
-db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
 
 if (opt.database == "viraldb")
   dbname = "viral"

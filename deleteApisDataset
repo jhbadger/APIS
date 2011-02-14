@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'apis'
 require 'ostruct'
 
@@ -28,7 +27,7 @@ ARGV.options {|opts|
   end
 }
 
-storage = MySQL.new(opt.host, opt.storage, "apis", "apis_user")
+storage = MyDB.new(opt.host, opt.storage, "apis", "apis_user")
 
 if (!opt.file)
   ARGV.each {|dataset|

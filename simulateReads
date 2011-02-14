@@ -2,7 +2,6 @@
 
 require 'optparse'
 require 'ostruct'
-require 'rubygems'
 require 'bio'
 
 opt = OpenStruct.new

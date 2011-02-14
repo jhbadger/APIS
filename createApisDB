@@ -2,7 +2,6 @@
 
 require 'optparse'
 require 'ostruct'
-require 'rubygems'
 require 'dm-core'
 require 'dm-migrations'
 require 'ApisDB'

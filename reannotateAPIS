@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'apis'
 require 'ostruct'
 
@@ -36,7 +35,7 @@ if (opt.storage == "")
   exit(1)
 end
 
-storage = MySQL.new(opt.host, opt.storage, "apis", "apis_user", opt.database)
+storage = MyDB.new(opt.host, opt.storage, "apis", "apis_user", opt.database)
 
 
 if (opt.all)

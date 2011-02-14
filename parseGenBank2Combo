@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'bio'
 require 'ostruct'
 
@@ -165,7 +164,7 @@ ARGV.each {|gb|
     }
     if (opt.tax)
       require 'DBwrapper'
-      db = MySQL.new("mysql-lan-pro", "combodb", "apis", "apis_user")
+      db = MyDB.new("mysql-lan-pro", "combodb", "apis", "apis_user")
       taxonomy = db.buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)
