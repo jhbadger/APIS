@@ -16,6 +16,7 @@ opt.host = "mysql://access:access@mysql-lan-pro"
 opt.split = false
 opt.tax = nil
 opt.ann = false
+opt.taxonomy = nil
 
 o = OptionParser.new
 o.banner << " [dataset...dataset]"
@@ -24,6 +25,7 @@ o.on("-f ", "--file ", String,
         "read list of ids to search from file") {|f| opt.f = f}   
 o.on("-v", "--inverse", "return lines not matching expression") {opt.v = true}
 o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
+o.on("-t ", "--taxonomy ", String, "only print with matching taxonomy") {|t| opt.taxonomy = t}
 o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
 o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
 o.on("-z", "--annotation", "include annotation") {opt.ann = true}
@@ -65,6 +67,9 @@ ARGV.each do |dataset|
     print = true
     print = false if (opt.f && opt.v && seen[seq.name])
     print = false if (opt.f && !opt.v && !seen[seq.name])
+    if (opt.taxonomy)
+      print = false if !seq.classification.to_s =~/#{opt.taxonomy}/
+    end
     if (print)
       header = seq.name
       if (opt.ann)
