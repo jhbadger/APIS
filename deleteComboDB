@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'apis'
 require 'ostruct'
 
@@ -50,7 +49,7 @@ if (opt.file)
   }
 end
 
-db = MySQL.new(opt.host, opt.database, "apis", "apis_user")
+db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
 
 ARGV.each {|id|
   if (opt.species)

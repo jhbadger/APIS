@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'rubygems'
 require 'apis'
 require 'bio'
 require 'date'
@@ -88,7 +87,7 @@ if (opt.storage == "")
 end
 
 
-storage = MySQL.new(opt.host, opt.storage, "apis", "apis_user", opt.database)
+storage = MyDB.new(opt.host, opt.storage, "apis", "apis_user", opt.database)
 
 ARGV.each {|prot|
   prot = asProt(prot, opt.minOrf)

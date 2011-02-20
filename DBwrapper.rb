@@ -43,16 +43,16 @@ class DBwrapper
         dbs[File.basename(source, ".db")] = SQLite.new(db)
       elsif (source =~/::/)
         host, dbname = source.split("::")
-        dbs[dbname] = MySQL.new(host, dbname, user, password)
+        dbs[dbname] = MyDB.new(host, dbname, user, password)
         dbs[dbname].close
       else
         host = source
-        db = MySQL.new(host, "", user, password)
+        db = MyDB.new(host, "", user, password)
         db.query("SHOW DATABASES").each {|row|
           dbname = row[0]
           if (dbname =~/_apis/)
             next if dbname == "gos_io_apis" || dbname == "compdb_apis" || dbname == "gos_assembly_apis"
-            dbs[dbname] = MySQL.new(host, dbname, user, password)
+            dbs[dbname] = MyDB.new(host, dbname, user, password)
             dbs[dbname].close
           end
         }
@@ -558,7 +558,7 @@ class DBwrapper
   end
 end
 
-class MySQL < DBwrapper
+class MyDB < DBwrapper
   def initialize(host, dbname, user, password, combodb = nil)
     require "mysql"
     @host = host
