@@ -67,7 +67,9 @@ ARGV.each do |dataset|
     print = false if (opt.f && opt.v && seen[seq.name])
     print = false if (opt.f && !opt.v && !seen[seq.name])
     if (opt.taxonomy)
-      print = false if !seq.classification.to_s =~/#{opt.taxonomy}/
+      tax = seq.classification.to_s
+      print = false if tax !~/#{opt.taxonomy}/i
+      print = !print if (opt.v) && tax != ""
     end
     if (print)
       header = seq.name
