@@ -53,7 +53,7 @@ end
 query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}')"
 STDERR << "Counting sequences...\n"
 num = repository(:default).adapter.select(query).first
-milestone = num / 200.0
+milestone = num / 200
 printID = Hash.new
 
 if (opt.file)
@@ -87,9 +87,9 @@ ARGV.each do |dataset|
       header += " " + seq.annotation.to_s
     end
     if (opt.taxonomy)
-      tax = [seq.kingdom, seq.phylum, seq.cl, seq.ord, seq.family, seq.genus, seq.species].join(";")
+      tax = [seq.kingdom, seq.phylum, seq.cl, seq.ord, seq.family, seq.genus, seq.species].join("; ").split("Mixed").first
       header += " [" + tax + "]"
-      printIt = false if (tax !~/#{opt.tax}/)
+      printIt = false if (tax !~/#{opt.taxonomy}/)
     end
     printIt = !printIt if (opt.inverse)
     file.print ">#{header}\n#{seq.sequence.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}" if printIt
