@@ -2,14 +2,15 @@
 
 require 'optparse'
 require 'dm-core'
-require 'ApisDB'
+require 'Newick'
 require 'ostruct'
+require 'ApisDB'
 
-$VERBOSE = nil
 opt = OpenStruct.new
+
 opt.all = false
-opt.f = false
-opt.v = false
+opt.file = false
+opt.inverse = false
 opt.storage = "misc_apis"
 opt.host = "mysql://access:access@mysql-lan-pro"
 opt.split = false
@@ -17,68 +18,82 @@ opt.tax = nil
 opt.ann = false
 opt.taxonomy = nil
 
-o = OptionParser.new
-o.banner << " [dataset...dataset]"
-o.on("-a", "--all", "dump all datasets") {opt.all = true}
-o.on("-f ", "--file ", String, 
-        "read list of ids to search from file") {|f| opt.f = f}   
-o.on("-v", "--inverse", "return lines not matching expression") {opt.v = true}
-o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
-o.on("-t ", "--taxonomy ", String, "only print with matching taxonomy") {|t| opt.taxonomy = t}
-o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
-o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
-o.on("-z", "--annotation", "include annotation") {opt.ann = true}
-
-begin
-  o.parse!
-rescue
-  STDERR << $!.message << "\n"
-  STDERR << o
-  exit(1)
-end
-if (ARGV.size < 1 && !opt.all)
-  STDERR << o
-  exit(1)
-end
+ARGV.options {|o|
+  o.banner << " [dataset...dataset]"
+  o.on("-a", "--all", "dump all datasets") {opt.all = true}
+  o.on("-f ", "--file ", String, 
+        "read list of ids to search from file") {|f| opt.file = f}   
+  o.on("-v", "--inverse", "return lines not matching expression") {opt.inverse = true}
+  o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
+  o.on("-t ", "--taxonomy ", String, "only print with matching taxonomy") {|t| opt.taxonomy = t}
+  o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
+  o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
+  o.on("-z", "--annotation", "include annotation") {opt.ann = true}
+  begin
+    o.parse!
+  rescue
+    STDERR << $!.message << "\n"
+    STDERR << o 
+    exit(1)
+  end
+  if (ARGV.size < 1 && !opt.all)
+    STDERR << o
+    exit(1)
+  end
+}
 
 DataMapper.setup(:default, opt.host + "/" + opt.storage)
 
 if (opt.all)
-  Dataset.all.each do |dataset|
-    ARGV.push(dataset.id)
+  repository(:default).adapter.select("select dataset from dataset").each do |dataset|
+    ARGV.push(dataset)
   end
 end
 
-seen = Hash.new  
-if (opt.f)
-  File.new(opt.f).each {|line|
-    seen[line.chomp] = true
-  }
+query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}')"
+STDERR << "Counting sequences...\n"
+num = repository(:default).adapter.select(query).first
+milestone = num / 200.0
+printID = Hash.new
+
+if (opt.file)
+  STDERR << "Loading file of ids...\n"
+  File.new(opt.file).each do |line|
+    id, rest = line.chomp.split(" ")
+    printID[id] = true
+  end
 end
 
+file = STDOUT
+count = 0
+STDERR << "Writing Peptides...\n"
 ARGV.each do |dataset|
   if (opt.split)
-    out = File.new(dataset + ".pep", "w")
-  else
-    out = STDOUT
+    file.close if file != STDOUT
+    file = File.new(dataset + ".pep", "w")
   end
-  Sequence.all(:dataset_id => dataset).each do |seq|
-    print = true
-    print = false if (opt.f && opt.v && seen[seq.name])
-    print = false if (opt.f && !opt.v && !seen[seq.name])
+  query =  "SELECT sequence.seq_name, sequence, annotation, "
+  query += "kingdom, phylum, class as cl, ord, family, genus, species FROM sequence "
+  query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
+  query += "AND sequence.dataset = classification.dataset " 
+  query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
+  query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
+  query += "WHERE sequence.dataset='#{dataset}'"
+  repository(:default).adapter.select(query).each do |seq|
+    printIt = true
+    printIt = false if (opt.file && !printID[seq.seq_name])
+    header = seq.seq_name
+    if (opt.ann)
+      header += " " + seq.annotation.to_s
+    end
     if (opt.taxonomy)
-      tax = seq.classification.to_s
-      print = false if tax !~/#{opt.taxonomy}/i
-      print = !print if (opt.v) && tax != ""
+      tax = [seq.kingdom, seq.phylum, seq.cl, seq.ord, seq.family, seq.genus, seq.species].join(" ")
+      printIt = false if (tax !~/#{opt.tax}/)
     end
-    if (print)
-      header = seq.name
-      if (opt.ann)
-        ann = seq.annotations.first(:source => "APIS")
-        header += " " + ann.annotation if (ann)
-      end
-      out.print ">#{header}\n#{seq.sequence.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    end
+    printIt = !printIt if (opt.inverse)
+    file.print ">#{header}\n#{seq.sequence.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}" if printIt
+    count += 1
+    STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
   end
-  out.close if (opt.split)
 end
+file.close if file != STDOUT
