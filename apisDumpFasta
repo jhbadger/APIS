@@ -87,7 +87,8 @@ ARGV.each do |dataset|
       header += " " + seq.annotation.to_s
     end
     if (opt.taxonomy)
-      tax = [seq.kingdom, seq.phylum, seq.cl, seq.ord, seq.family, seq.genus, seq.species].join(" ")
+      tax = [seq.kingdom, seq.phylum, seq.cl, seq.ord, seq.family, seq.genus, seq.species].join(";")
+      header += " [" + tax + "]"
       printIt = false if (tax !~/#{opt.tax}/)
     end
     printIt = !printIt if (opt.inverse)
