@@ -29,6 +29,8 @@ opt.clear = false
 opt.skipBlast = false
 opt.gblocks = false
 opt.timelogic = false
+opt.user = "apis"
+opt.password = "apis_user"
 
 $VERBOSE = nil
 
@@ -61,6 +63,10 @@ o.on("-r", "--ruleMajority", "use majority classification") {opt.ruleMaj = true}
 o.on("-s ", "--storage ", String, "storage database") {|s| opt.storage = s}
 o.on("-t ", "--maxTree ", Integer, 
      "max number of seqs in tree (default #{opt.maxTree})") {|t| opt.maxTree = t}
+o.on("-u ", "--user ", String, 
+     "db user (default #{opt.user})") {|t| opt.user = t}
+o.on("-w ", "--password ", String, 
+     "db password (default #{opt.password})") {|t| opt.password = t}
 o.on(nil, "--timelogic", "use Timelogic Server (default #{opt.timelogic})") {opt.timelogic = true}
 o.on("-x", "--skipBlast", 
      "skip blast step (default #{opt.skipBlast})") {opt.skipBlast = true}
@@ -87,7 +93,7 @@ if (opt.storage == "")
 end
 
 
-storage = MyDB.new(opt.host, opt.storage, "apis", "apis_user", opt.database)
+storage = MyDB.new(opt.host, opt.storage, opt.user, opt.password, opt.database)
 
 ARGV.each {|prot|
   prot = asProt(prot, opt.minOrf)

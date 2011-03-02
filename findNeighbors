@@ -5,7 +5,7 @@ require 'Newick'
 require 'optparse'
 require 'ApisDB'
 require 'ComboDB'
-require 'fastercsv'
+require 'csv'
 require 'ostruct'
 
 opt = OpenStruct.new

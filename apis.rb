@@ -292,6 +292,8 @@ def runGridApis(storage, dataset, opt)
   cmd = "apisRun "
   cmd += "-a " if opt.annotate
   cmd += "-t #{opt.maxTree} "
+  cmd += "-u #{opt.user} "
+  cmd += "-w #{opt.password} "
   cmd += "-d #{opt.database} "
   cmd += "-g " if (opt.gblocks)
   cmd += "-s #{opt.storage} "

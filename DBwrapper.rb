@@ -580,8 +580,8 @@ class MyDB < DBwrapper
         @connection = Mysql::new(@host, @user, @password, @db) 
         @connected = true
       rescue
-        STDERR.printf("%s: waiting...\n", $!)
-        sleep 0.1
+        #STDERR.printf("%s: waiting...\n", $!)
+        sleep 0.2
       end
     end
   end
