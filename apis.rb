@@ -64,7 +64,7 @@ def runAlignment(storage, seq, dataset, blastHomologs, gblocks)
   end
   storage.connect
   storage.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
-  if (len > 0)
+  if (!len.nil? && len > 0)
     return seq.entry_id + ".afa"
   else
     return nil
@@ -210,7 +210,7 @@ def processPep(storage, seq, dataset, opt)
     runBlast(storage, seq, dataset, opt.maxHits, opt.evalue) if (!opt.skipBlast)
     blastHomologs = storage.fetchBlast(seq.entry_id, dataset, opt.evalue, 
                                        opt.maxTree, storage.tax)
-    if (blastHomologs.size > 2)
+    if (!blastHomologs.nil? && blastHomologs.size > 2)
       alignFile = runAlignment(storage, seq, dataset, blastHomologs,
                                opt.gblocks) 
       if (!alignFile.nil?)
