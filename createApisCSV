@@ -8,37 +8,37 @@ require 'csv'
 require 'ComboDB'
 require 'ApisDB'
 
-opts = OpenStruct.new
+opt = OpenStruct.new
 
-opts.all = false
-opts.host = "mysql://access:access@mysql-lan-pro"
-opts.storage = "misc_apis"
-opts.proteindb = "phylodb"
-opts.tree = false
-opts.boot = false
-opts.cut = false
-opts.delim = false
-opts.exp = false
-opts.file = false
-opts.schmidt = false
-opts.relax = false
-opts.limit = false
+opt.all = false
+opt.host = "mysql://access:access@mysql-lan-pro"
+opt.storage = "misc_apis"
+opt.proteindb = "phylodb"
+opt.tree = false
+opt.boot = false
+opt.cut = false
+opt.delim = false
+opt.exp = false
+opt.file = false
+opt.schmidt = false
+opt.relax = false
+opt.limit = false
 
 ARGV.options {|o|
   o.banner << " [dataset .. dataset..]"
-  o.on("-a", "--all", "include all datasets in database (#{opts.all})") {|t| opts.all = true}
-  o.on("-b", "--bootstrap", "include bootstrap value (#{opts.boot})") {|t| opts.boot = t}
-  o.on("-c", "--cut", "separate file per dataset (#{opts.cut})") {|t| opts.cut = true}
-  o.on("-d", "--delim-tab", "use tab delimiter (#{opts.delim})") {|t| opts.delim = true}
-  o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opts.exp = t}
-  o.on("-f ", "--file ", String, "only include ids from file") {|t| opts.file = t}
-  o.on("-h ", "--host ", String, "database host (#{opts.host})") {|t| opts.host = t}
-  o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opts.limit = t}
-  o.on("-p ", "--proteindb ", String, "protein database (default #{opts.proteindb})") {|t| opts.proteindb = t}
-  o.on("-r", "--relax", "relaxed classification (#{opts.relax})") {|t| opts.relax = true}
-  o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
-  o.on("-t", "--tree", "include tree in file (#{opts.tree})") {|t| opts.tree = t}
-   o.on("-z", "--filtered", "only include schmidt filtered (#{opts.schmidt})") {|t| opts.schmidt = t}
+  o.on("-a", "--all", "include all datasets in database (#{opt.all})") {opt.all = true}
+  o.on("-b", "--bootstrap", "include bootstrap value (#{opt.boot})") {|t| opt.boot = t}
+  o.on("-c", "--cut", "separate file per dataset (#{opt.cut})") {opt.cut = true}
+  o.on("-d", "--delim-tab", "use tab delimiter (#{opt.delim})") {opt.delim = true}
+  o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
+  o.on("-f ", "--file ", String, "only include ids from file") {|t| opt.file = t}
+  o.on("-h ", "--host ", String, "database host (#{opt.host})") {|t| opt.host = t}
+  o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opt.limit = t}
+  o.on("-p ", "--proteindb ", String, "protein database (default #{opt.proteindb})") {|t| opt.proteindb = t}
+  o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
+  o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
+  o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
+   o.on("-z", "--filtered", "only include schmidt filtered (#{opt.schmidt})") {opt.schmidt = true}
   begin
     o.parse!
   rescue
@@ -46,35 +46,39 @@ ARGV.options {|o|
     STDERR << o 
     exit(1)
   end
-  if (ARGV.size < 1 && (!opts.all && !opts.exp))
+  if (ARGV.size < 1 && (!opt.all && !opt.exp))
     STDERR << o
     exit(1)
   end
 }
 
-DataMapper.setup(:default, opts.host + "/" + opts.storage)
-DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
+DataMapper.setup(:default, opt.host + "/" + opt.storage)
+DataMapper.setup(:combodb, opt.host + "/" + opt.proteindb)
 
-if (opts.all || opts.exp)
+if (opt.all || opt.exp)
   repository(:default).adapter.select("select dataset from dataset").each do |dataset|
-    ARGV.push(dataset) if (opts.exp.nil? || dataset =~/#{opts.exp}/)
+    ARGV.push(dataset) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
 end
 
-if (opts.delim)
-  opts.delim = "\t"
+
+if (opt.delim)
+  opt.delim = "\t"
 else
-  opts.delim = ","
+  opt.delim = ","
 end
 
 out = Hash.new
+exist = Dir.glob("*.csv") + Dir.glob("*.tab")
+exist = exist.collect{|x| x.gsub(".csv","").gsub(".tab","")}
+datasets = ARGV - exist
 
 header = ["Seq Name", "Dataset", "Length", "Annotation", "Standard Classification", "Standard Tax Id"]
-header.push("Relaxed Classification", "Relaxed Tax Id") if opts.relax
-header.push("Bootstrap") if (opts.boot)
-header.push("Tree") if (opts.tree)
+header.push("Relaxed Classification", "Relaxed Tax Id") if opt.relax
+header.push("Bootstrap") if (opt.boot)
+header.push("Tree") if (opt.tree)
 
-if (opts.tree || opts.relax)
+if (opt.tree || opt.relax)
   STDERR << "Loading Taxonomy...\n"
   taxdb = repository(:combodb){Contig.tax}
 else
@@ -102,36 +106,37 @@ def summarizeClass(tax)
 end
 
 
-exist = Dir.glob("*.csv") + Dir.glob("*.tab")
-exist = exist.collect{|x| x.gsub(".csv","").gsub(".tab","")}
-ARGV = ARGV - exist
+inClause = ""
 
+if (opt.file)
+  inClause = "("
+  STDERR << "Loading file of ids...\n"
+  File.new(opt.file).each do |line|
+    id, rest = line.chomp.split(" ")
+    inClause += "'" + id + "',"
+  end
+  inClause.chop!
+  inClause += ")"
+end
 
-query = "SELECT count(*) FROM sequence WHERE dataset in ('#{ARGV.join('\',\'')}')"
+query = "SELECT count(*) FROM sequence WHERE dataset in ('#{datasets.join('\',\'')}')"
+query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
 STDERR << "Counting sequences...\n"
 num = repository(:default).adapter.select(query).first
 milestone = num / 200.0
-printID = Hash.new
-
-if (opts.file)
-  STDERR << "Loading file of ids...\n"
-  File.new(opts.file).each do |line|
-    id, rest = line.chomp.split(" ")
-    printID[id] = true
-  end
-end
 
 file = STDOUT
-file << header.to_csv({:col_sep=>opts.delim}) if (!opts.cut)
+file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut)
 ext = ".csv"
-ext = ".tab" if (opts.delim)
+ext = ".tab" if (opt.delim)
 count = 0
 STDERR << "Writing Spreadsheet...\n"
-ARGV.each do |dataset|
-  if (opts.cut)
+
+datasets.each do |dataset|
+  if (opt.cut)
     file.close if file != STDOUT
     file = File.new(dataset + ext, "w")
-    file << header.to_csv({:col_sep=>opts.delim})
+    file << header.to_csv({:col_sep=>opt.delim})
   end
   query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
   query += "kingdom, phylum, class, ord, family, genus, species, tree"
@@ -142,21 +147,22 @@ ARGV.each do |dataset|
   query += "AND sequence.dataset = tree.dataset " 
   query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
   query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
-  query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opts.schmidt)
+  query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opt.schmidt)
   query += "WHERE sequence.dataset='#{dataset}'"
-  query += " AND filtered = 1 " if (opts.schmidt)
-  query += " LIMIT #{opts.limit}" if (opts.limit)
+  query += " AND filtered = 1 " if (opt.schmidt)
+  query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
+  query += " LIMIT #{opt.limit}" if (opt.limit)
+  
   repository(:default).adapter.select(query).each do |row|
-    next if (opts.file && !printID[row[0]])
     list = row.to_a
     tree = list.pop
     begin
-      newick = NewickTree.new(tree) if (!tree.nil? && (opts.boot || opts.relax))
+      newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
     rescue
       newick = nil
     end
     tax, tid = summarizeClass(list[4..10])
-    if (opts.relax)
+    if (opt.relax)
       if (tree.nil? || newick.nil?)
         rtax = ""
         rtid = nil
@@ -168,15 +174,15 @@ ARGV.each do |dataset|
     else
       list[4..10] = [tax, tid]
     end
-    if (opts.boot)
+    if (opt.boot)
       if (tree.nil? || newick.nil?)
         list.push(nil)
       else
         list.push(newick.findNode(row[0]).parent.name)
       end
     end
-    list.push(tree) if (opts.tree)
-    file << list.to_csv({:col_sep=>opts.delim})
+    list.push(tree) if (opt.tree)
+    file << list.to_csv({:col_sep=>opt.delim})
     count += 1
     STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
     row = nil
