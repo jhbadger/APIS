@@ -31,9 +31,5 @@ class ZFile < File
       f.close
     end
     return result
-  end
-  def ZFile.finalize(id)
-          puts "Object #{id} dying at #{Time.new}"
-      end
-  
+  end  
 end

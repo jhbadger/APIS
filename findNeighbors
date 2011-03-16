@@ -10,14 +10,22 @@ require 'ostruct'
 
 opt = OpenStruct.new
 
+opt.all = false
 opt.host = "mysql://jbadger:plankton@mysql-lan-pro"
 opt.database = "phylodb"
 opt.storage = "misc_apis"
+opt.cog = false
+opt.exp = false
+opt.file = false
 
 o = OptionParser.new
 o.banner << " dataset [dataset...]"
+o.on("-a", "--all", "include all datasets in database (#{opt.all})") {opt.all = true}
+o.on("-c", "--cog", "Use cog info") {opt.cog = true}
 o.on("-d ", "--database ", String, 
      "query database (default #{opt.database})") {|d| opt.database = d}
+o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
+o.on("-f ", "--file ", String, "only include ids from file") {|t| opt.file = t}
 o.on("-h ", "--host ", String, 
      "database host (default #{opt.host})") {|h| opt.host = h}
 o.on("-s ", "--storage ", String, 
@@ -29,7 +37,7 @@ rescue
   STDERR << o
   exit(1)
 end
-if (ARGV.size < 1)
+if (ARGV.size < 1 && (!opt.all && !opt.exp))
   STDERR << o
   exit(1)
 end
@@ -38,17 +46,59 @@ end
 DataMapper.setup(:default, opt.host + "/" + opt.storage)
 DataMapper.setup(:combodb, opt.host + "/" + opt.database)
 
+header = ["Sequence", "Dataset", "Kingdom", "Neighbor", "Bootstrap", "Distance"]
+header += ["COG", "COG Definition"] if opt.cog
+
+print header.to_csv
+
+if (opt.all || opt.exp)
+  repository(:default).adapter.select("select dataset from dataset").each do |dataset|
+    ARGV.push(dataset) if (!opt.exp || dataset =~/#{opt.exp}/)
+  end
+end
+
+inClause = ""
+
+if (opt.file)
+  inClause = "("
+  STDERR << "Loading file of ids...\n"
+  File.new(opt.file).each do |line|
+    id, rest = line.chomp.split(/ |,/)
+    inClause += "'" + id + "',"
+  end
+  inClause.chop!
+  inClause += ")"
+end
+
+datasets = "("
 ARGV.each do |dataset|
-  repository(:default).adapter.select("SELECT classification.seq_name, tree, kingdom FROM tree, classification WHERE tree.dataset = '#{dataset}' AND classification.dataset = tree.dataset AND tree.seq_name = classification.seq_name").each do |tree|
-    begin
-      newick =  NewickTree.new(tree.tree)
-    rescue
-      STDERR << "Cannot parse tree for #{tree.seq_name}...\n"
-      next
-    end
-    neighbor = newick.relatives(tree.seq_name).first.first
-    id, species = neighbor.split("__")
-    data = repository(:default).adapter.select("SELECT * FROM phylodb_annotation.blast, phylodb_annotation.cog_proteins, phylodb_annotation.cog_definitions where target = 'cog' AND query = '#{id}' AND hit=protein AND cog_proteins.cog = cog_definitions.cog")
+  datasets += "'" + dataset + "',"
+end
+datasets.chop!
+datasets += ")"
+
+query = "SELECT tree.seq_name, tree, tree.dataset, kingdom FROM tree, classification "
+query += "WHERE tree.dataset IN #{datasets} AND classification.dataset = tree.dataset AND "
+query += "tree.seq_name = classification.seq_name"
+query += " AND classification.seq_name IN #{inClause}" if inClause != ""
+repository(:default).adapter.select(query).each do |tree|
+  begin
+    newick =  NewickTree.new(tree.tree)
+  rescue
+    STDERR << "Cannot parse tree for #{tree.seq_name}...\n"
+    next
+  end
+  neighborNode = newick.findNode(newick.relatives(tree.seq_name).first.first)
+  queryNode = newick.findNode(tree.seq_name)
+  lca = queryNode.lca(neighborNode)
+  dist = queryNode.distToAncestor(lca) + neighborNode.distToAncestor(lca)  
+  row = [tree.seq_name, tree.dataset, tree.kingdom, neighborNode.name, lca.name, dist]
+  if (opt.cog)
+    id, species = neighborNode.name.split("__")
+    query = "SELECT * FROM phylodb_annotation.blast, phylodb_annotation.cog_proteins, "
+    query += "phylodb_annotation.cog_definitions where target = 'cog' AND query = '#{id}' "
+    query += "AND hit=protein AND cog_proteins.cog = cog_definitions.cog"
+    data = repository(:default).adapter.select(query)
     datum = data.first
     if (datum.nil?)
       cog = ""
@@ -57,6 +107,7 @@ ARGV.each do |dataset|
       cog = datum["cog"]
       definition = datum["definition"]
     end
-    print tree.seq_name + "\t" + dataset + "\t" + tree.kingdom + "\t" + cog + "\t" + definition + "\n"
+    row.push(cog, definition)
   end
+  print row.to_csv
 end
