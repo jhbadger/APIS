@@ -209,6 +209,7 @@ end
 
 # BLAST results
 get "/:db/:dataset/:seq/blast" do |db, dataset, seq|
+  seq.gsub!(" ","+") # fix conversion of pluses to spaces in urls
   @title = "APIS: Automated Phylogenetic Inference System: #{seq} BLAST"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<H1>BLAST report for #{seq}</H1>"
@@ -227,6 +228,7 @@ end
  
 # Tree data
 get "/:db/:dataset/:seq/tree" do |db, dataset, seq|
+  seq.gsub!(" ","+") # fix conversion of pluses to spaces in urls
   @title = "APIS: Automated Phylogenetic Inference System: #{seq} Tree"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = ""
@@ -260,6 +262,7 @@ end
 # display Tree PDF
 ["/:db/:dataset/:seq/pdf", "/:db/:dataset/:seq/id_pdf"].each do |path|
   get path do |db, dataset, seq|
+    seq.gsub!(" ","+") # fix conversion of pluses to spaces in urls
     @title = "APIS: Automated Phylogenetic Inference System: #{seq} Tree"
     @project_name = "APIS: Automated Phylogenetic Inference System"
     if (request.url =~/id_pdf/)
@@ -280,6 +283,7 @@ end
 
 # display sequence
 get "/:db/:dataset/:seq/seq" do |db, dataset, seq|
+  seq.gsub!(" ","+") # fix conversion of pluses to spaces in urls
   @title = "APIS: Automated Phylogenetic Inference System: #{seq}"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = ""
@@ -299,6 +303,7 @@ end
 
 # display alignment
 get "/:db/:dataset/:seq/alignment" do |db, dataset, seq|
+  seq.gsub!(" ","+") # fix conversion of pluses to spaces in urls
   @title = "APIS: Automated Phylogenetic Inference System: #{seq} alignment"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<pre>\n"
