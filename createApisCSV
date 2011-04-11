@@ -1,5 +1,10 @@
 #!/usr/bin/env ruby
 
+# createApisCSV is a script for generating reports from an existing APIS run, or sets of runs. This output can be in the 
+# form of csv file(s) or tab delimited file(s). By default, the sequence name, dataset, seq length, annotation, 
+# classification, and NCBI tax id of the classification are reported, but other fields, such as bootstrap value and the
+# "relaxed" classification can be included
+
 require 'optparse'
 require 'dm-core'
 require 'Newick'
@@ -38,7 +43,7 @@ ARGV.options {|o|
   o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
-   o.on("-z", "--filtered", "only include schmidt filtered (#{opt.schmidt})") {opt.schmidt = true}
+  o.on("-z", "--filtered", "only include schmidt filtered (#{opt.schmidt})") {opt.schmidt = true}
   begin
     o.parse!
   rescue
@@ -69,124 +74,126 @@ else
 end
 
 out = Hash.new
-exist = Dir.glob("*.csv") + Dir.glob("*.tab")
-exist = exist.collect{|x| x.gsub(".csv","").gsub(".tab","")}
-datasets = ARGV - exist
 
-header = ["Seq Name", "Dataset", "Length", "Annotation", "Standard Classification", "Standard Tax Id"]
-header.push("Relaxed Classification", "Relaxed Tax Id") if opt.relax
-header.push("Bootstrap") if (opt.boot)
-header.push("Tree") if (opt.tree)
+datasets = ARGV
 
-if (opt.tree || opt.relax)
-  STDERR << "Loading Taxonomy...\n"
-  taxdb = repository(:combodb){Contig.tax}
-else
-  taxdb = nil
-end
 
-def summarizeClass(tax)
-  t = ""
-  tid = nil
-  goodRank = ""
-  tax.each do |rank|
-    if (rank !="Undefined" && !rank.nil?)
-      t += "; " if t != ""
-      t += rank
-      break if rank == "Mixed"
+if (!datasets.empty?)
+  header = ["Seq Name", "Dataset", "Length", "Annotation", "Standard Classification", "Standard Tax Id"]
+  header.push("Relaxed Classification", "Relaxed Tax Id") if opt.relax
+  header.push("Bootstrap") if (opt.boot)
+  header.push("Tree") if (opt.tree)
+
+  if (opt.tree || opt.relax)
+    STDERR << "Loading Taxonomy...\n"
+    taxdb = repository(:combodb){Contig.tax}
+  else
+    taxdb = nil
+  end
+
+  def summarizeClass(tax)
+    t = ""
+    tid = nil
+    goodRank = ""
+    tax.each do |rank|
+      if (rank !="Undefined" && !rank.nil?)
+        t += "; " if t != ""
+        t += rank
+        break if rank == "Mixed"
+      end
+      goodRank = rank
     end
-    goodRank = rank
+    t = "NO_TREE" if t == ""
+    if (goodRank != "")
+      tid = repository(:combodb).adapter.select("select ncbi_taxon_id from phylodb_annotation.taxon, phylodb_annotation.taxon_name " + 
+        "where name = '#{goodRank}' and phylodb_annotation.taxon.taxon_id = phylodb_annotation.taxon_name .taxon_id limit 1").first
+    end
+    return t, tid
   end
-  t = "NO_TREE" if t == ""
-  if (goodRank != "")
-    tid = repository(:combodb).adapter.select("select ncbi_taxon_id from phylodb_annotation.taxon, phylodb_annotation.taxon_name " + 
-      "where name = '#{goodRank}' and phylodb_annotation.taxon.taxon_id = phylodb_annotation.taxon_name .taxon_id limit 1")
+
+
+  inClause = ""
+
+  if (opt.file)
+    inClause = "("
+    STDERR << "Loading file of ids...\n"
+    File.new(opt.file).each do |line|
+      id, rest = line.chomp.split(" ")
+      inClause += "'" + id + "',"
+    end
+    inClause.chop!
+    inClause += ")"
   end
-  return t, tid
-end
 
-
-inClause = ""
-
-if (opt.file)
-  inClause = "("
-  STDERR << "Loading file of ids...\n"
-  File.new(opt.file).each do |line|
-    id, rest = line.chomp.split(" ")
-    inClause += "'" + id + "',"
-  end
-  inClause.chop!
-  inClause += ")"
-end
-
-query = "SELECT count(*) FROM sequence WHERE dataset in ('#{datasets.join('\',\'')}')"
-query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
-STDERR << "Counting sequences...\n"
-num = repository(:default).adapter.select(query).first
-milestone = num / 200.0
-
-file = STDOUT
-file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut)
-ext = ".csv"
-ext = ".tab" if (opt.delim)
-count = 0
-STDERR << "Writing Spreadsheet...\n"
-
-datasets.each do |dataset|
-  if (opt.cut)
-    file.close if file != STDOUT
-    file = File.new(dataset + ext, "w")
-    file << header.to_csv({:col_sep=>opt.delim})
-  end
-  query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
-  query += "kingdom, phylum, class, ord, family, genus, species, tree"
-  query += " FROM sequence "
-  query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
-  query += "AND sequence.dataset = classification.dataset " 
-  query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
-  query += "AND sequence.dataset = tree.dataset " 
-  query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
-  query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
-  query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opt.schmidt)
-  query += "WHERE sequence.dataset='#{dataset}'"
-  query += " AND filtered = 1 " if (opt.schmidt)
+  query = "SELECT count(*) FROM sequence WHERE dataset in ('#{datasets.join('\',\'')}')"
   query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
-  query += " LIMIT #{opt.limit}" if (opt.limit)
+  STDERR << "Counting sequences...\n"
+  num = repository(:default).adapter.select(query).first
+  milestone = num / 200.0
+
+  file = STDOUT
+  file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut)
+  ext = ".csv"
+  ext = ".tab" if (opt.delim)
+  count = 0
+  STDERR << "Writing Spreadsheet...\n"
+
+  datasets.each do |dataset|
+    if (opt.cut)
+      file.close if file != STDOUT
+      file = File.new(dataset + ext, "w")
+      file << header.to_csv({:col_sep=>opt.delim})
+    end
+    query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
+    query += "kingdom, phylum, class, ord, family, genus, species, tree"
+    query += " FROM sequence "
+    query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
+    query += "AND sequence.dataset = classification.dataset " 
+    query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
+    query += "AND sequence.dataset = tree.dataset " 
+    query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
+    query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
+    query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opt.schmidt)
+    query += "WHERE sequence.dataset='#{dataset}'"
+    query += " AND filtered = 1 " if (opt.schmidt)
+    query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
+    query += " LIMIT #{opt.limit}" if (opt.limit)
   
-  repository(:default).adapter.select(query).each do |row|
-    list = row.to_a
-    tree = list.pop
-    begin
-      newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
-    rescue
-      newick = nil
-    end
-    tax, tid = summarizeClass(list[4..10])
-    if (opt.relax)
-      if (tree.nil? || newick.nil?)
-        rtax = ""
-        rtid = nil
-      else
-        relax = newick.createClassification(list[0], taxdb, nil, true)
-        rtax, rtid = summarizeClass(relax)
+    repository(:default).adapter.select(query).each do |row|
+      list = row.to_a
+      tree = list.pop
+      begin
+        newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
+      rescue
+        newick = nil
       end
-      list[4..10] = [tax, tid, rtax, rtid]
-    else
-      list[4..10] = [tax, tid]
-    end
-    if (opt.boot)
-      if (tree.nil? || newick.nil?)
-        list.push(nil)
+      tax, tid = summarizeClass(list[4..10])
+      if (opt.relax)
+        if (tree.nil? || newick.nil?)
+          rtax = ""
+          rtid = nil
+        else
+          relax = newick.createClassification(list[0], taxdb, nil, true)
+          rtax, rtid = summarizeClass(relax)
+        end
+        list[4..10] = [tax, tid, rtax, rtid]
       else
-        list.push(newick.findNode(row[0]).parent.name)
+        list[4..10] = [tax, tid]
       end
+      if (opt.boot)
+        if (tree.nil? || newick.nil?)
+          list.push(nil)
+        else
+          list.push(newick.findNode(row[0]).parent.name)
+        end
+      end
+      list.push(tree) if (opt.tree)
+      file << list.to_csv({:col_sep=>opt.delim})
+      count += 1
+      STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
+      row = nil
+      list = nil
     end
-    list.push(tree) if (opt.tree)
-    file << list.to_csv({:col_sep=>opt.delim})
-    count += 1
-    STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
-    row = nil
-    list = nil
   end
+  file.close if file != STDOUT
 end
-file.close if file != STDOUT
