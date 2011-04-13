@@ -119,7 +119,7 @@ if (!datasets.empty?)
     STDERR << "Loading file of ids...\n"
     File.new(opt.file).each do |line|
       id, rest = line.chomp.split(" ")
-      inClause += "'" + id + "',"
+      inClause += "'" + id + "'," if (!id.nil?)
     end
     inClause.chop!
     inClause += ")"
