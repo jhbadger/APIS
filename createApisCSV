@@ -28,6 +28,7 @@ opt.file = false
 opt.schmidt = false
 opt.relax = false
 opt.limit = false
+opt.blast = false
 
 ARGV.options {|o|
   o.banner << " [dataset .. dataset..]"
@@ -43,6 +44,7 @@ ARGV.options {|o|
   o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
+  o.on("-y", "--blast", "include top BLAST hit (#{opt.blast})") {opt.blast = true}
   o.on("-z", "--filtered", "only include schmidt filtered (#{opt.schmidt})") {opt.schmidt = true}
   begin
     o.parse!
@@ -83,6 +85,11 @@ if (!datasets.empty?)
   header.push("Relaxed Classification", "Relaxed Tax Id") if opt.relax
   header.push("Bootstrap") if (opt.boot)
   header.push("Tree") if (opt.tree)
+  if (opt.blast)
+    header.push("Blast ID")
+    header.push("Blast Annotation")
+    header.push("Blast Evalue")
+  end
 
   if (opt.tree || opt.relax)
     STDERR << "Loading Taxonomy...\n"
@@ -188,6 +195,14 @@ if (!datasets.empty?)
         end
       end
       list.push(tree) if (opt.tree)
+      if (opt.blast)
+        query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset}' AND "
+        query += "seq_name = '#{row[0]}' ORDER BY evalue ASC LIMIT 1"
+        blastHit = repository(:default).adapter.select(query).first
+        if (!blastHit.nil?)
+          list.push(blastHit["subject_name"],blastHit["subject_description"], blastHit["evalue"])
+        end
+      end
       file << list.to_csv({:col_sep=>opt.delim})
       count += 1
       STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
