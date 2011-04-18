@@ -4,6 +4,7 @@ require 'optparse'
 require 'apis'
 require 'bio'
 require 'ostruct'
+require 'date'
 
 opt = OpenStruct.new
 opt.database = "combodb"
@@ -34,6 +35,7 @@ contigs, pep, cds, ent, con, rrna = ARGV
 db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
 db.query("INSERT INTO updated VALUES('#{Date.today.to_s}')")
 
+taxHash = Hash.new
 File.new(contigs).each {|line|
   acc, len, org, strain, id, tax, form, proteins, rrnas, gc = line.chomp.tr("'","").split("\t")
   if (db.count("contigs where name = '#{acc}'") == 0)
@@ -41,6 +43,7 @@ File.new(contigs).each {|line|
              "'#{tax}', '', '#{opt.supergroup}', '#{form}', '')")
     STDERR.printf("Loading contig info for %s %s...\n", acc, org)
   end
+  taxHash[acc] = id
 }
 
 oldContig = ""
@@ -50,7 +53,7 @@ Bio::FlatFile.new(Bio::FastaFormat, File.new(pep)).each {|seq|
   prot = seq.seq
   ann = seq.definition.tr("'\"\\","").split(" ", 2).last.split(" {").first
   if (db.count("proteins where name = '#{name}'") == 0)
-    db.query("INSERT INTO proteins VALUES('#{name}', '#{contig}', '#{ann}', '#{prot}')")
+    db.query("INSERT INTO proteins VALUES('#{name}', '#{contig}', '#{ann}', '#{prot}', #{taxHash[contig]})")
     STDERR.printf("Loading proteins for %s...\n", contig) if (contig != oldContig) 
     oldContig = contig
   end

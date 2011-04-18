@@ -112,7 +112,11 @@ ARGV.each {|gb|
 	      locus = hash["protein_id"].first
       end
       if feature.feature == "source"
-	      strain = hash["strain"].first
+        if (hash["strain"])
+	        strain = hash["strain"].first
+        else
+          strain = ""
+        end
         if (hash["db_xref"])
           hash["db_xref"].each {|xref|
             taxonid = xref.gsub("taxon:", "") if (xref =~/taxon:/)
@@ -152,13 +156,13 @@ ARGV.each {|gb|
 	      locations.first.strand.to_s + "\t" + product + "\n"
 	      rrnas += 1
       elsif feature["product"].to_s =~ /tRNA/i # tRNA
-	      key = "tRNA-" + locus + "-" + acc
-	      header = key + " " + product
+	      key = "tRNA-" + locus.to_s + "-" + acc.to_s
+	      header = key.to_s + " " + product.to_s
 	      seq = getSequence(dna, locations)
 	      trna.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
-	      ent.print key + "\t" + locus + "\t" + locations.first.from.to_s +
+	      ent.print key + "\t" + locus.to_s + "\t" + locations.first.from.to_s +
 	      "\t" + locations.first.to.to_s + "\t" + 
-	      locations.first.strand.to_s + "\t" + product + "\n"
+	      locations.first.strand.to_s + "\t" + product.to_s + "\n"
 	      trnas += 1
       end
     }
@@ -175,7 +179,7 @@ ARGV.each {|gb|
     end
     att.print acc + "\t" + genome.length.to_s + "\t"
     att.print genome.organism + "\t" + strain + "\t" + taxonid + "\t"
-    att.print taxonomy + "\t" + classifyMolecule(genome.definition) + "\t"
+    att.print taxonomy.gsub(",", "") + "\t" + classifyMolecule(genome.definition) + "\t"
     att.print proteins.to_s + "\t" + rrnas.to_s + "\t" + trnas.to_s + "\t"
     gc =  (dna.count("g") + dna.count("c")) / (1.0 * dna.length)  
     att.print sprintf("%5.2f%%\n", gc * 100)
