@@ -167,13 +167,13 @@ ARGV.each {|gb|
       end
     }
     if (opt.tax)
-      require 'DBwrapper'
-      db = MyDB.new("mysql-lan-pro", "phylodb_annotation", "apis", "apis_user")
-      taxonomy = db.buildTaxFromTaxId(taxonid, true)
+      require 'dm-core'
+      require 'ComboDB'
+      DataMapper.setup(:combodb, "mysql://access:access@mysql-lan-pro/phylodb_annotation")
+      taxonomy = buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)
       end
-      db.close
     else
       taxonomy = genome.taxonomy.chop
     end

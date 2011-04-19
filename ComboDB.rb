@@ -75,7 +75,7 @@ def buildTaxFromTaxId(taxid, string = false, verbose = false)
   while (name != "root")
     query = "select parent_id, name, rank from phylodb_annotation.taxonomy WHERE tax_id = #{taxid}"
     pid, name, rank = repository(:combodb).adapter.select(query).first.to_a
-    STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) #if verbose
+    STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) if verbose
     return nil if pid.nil?
     pos = levels.index(rank)
     if (pos.nil?)
