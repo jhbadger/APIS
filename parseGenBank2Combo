@@ -147,8 +147,8 @@ ARGV.each {|gb|
 	      locations.first.strand.to_s + "\t" + product + "\n"
 	      proteins += 1
       elsif feature["product"].to_s =~ /ribosomal RNA/i # rRNA
-	      key = "rRNA-" + locus + "-" + acc
-	      header = key + " " + product
+	      key = "rRNA-" + locus.to_s + "-" + acc.to_s
+	      header = key + " " + product.to_s
 	      seq = getSequence(dna, locations)
 	      rna.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
 	      ent.print key + "\t" + locus + "\t" + locations.first.from.to_s +
@@ -168,7 +168,7 @@ ARGV.each {|gb|
     }
     if (opt.tax)
       require 'DBwrapper'
-      db = MyDB.new("mysql-lan-pro", "combodb", "apis", "apis_user")
+      db = MyDB.new("mysql-lan-pro", "phylodb_annotation", "apis", "apis_user")
       taxonomy = db.buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)
