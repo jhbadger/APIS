@@ -64,3 +64,40 @@ class Rrna
     return ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
   end
 end
+
+def buildTaxFromTaxId(taxid, string = false, verbose = false)
+  levels = ["kingdom", "phylum", "class", "order", "family", 
+            "genus", "species"]
+  name = ""
+  pid = ""
+  rank = ""
+  tax = [""]*7
+  while (name != "root")
+    query = "select parent_id, name, rank from phylodb_annotation.taxonomy WHERE tax_id = #{taxid}"
+    pid, name, rank = repository(:combodb).adapter.select(query).first.to_a
+    STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) #if verbose
+    return nil if pid.nil?
+    pos = levels.index(rank)
+    if (pos.nil?)
+      pos = 0 if name == "Viruses" || name == "Viroids"
+      pos = 1 if name =~ /viruses/
+    end
+    tax[pos] = name.tr(",()[]'\"/","") if (pos)
+    taxid = pid
+  end
+  6.step(0, -1) {|i|
+    if (tax[i] == "")
+      tax[i] = tax[i + 1].split(" (").first + " (" + levels[i] + ")"
+    end
+  }
+  if (string)
+    tline = ""
+    tax.each {|lev|
+      tline += lev
+      tline += "; " if lev != tax.last
+    }
+    return tline
+  else
+    return tax
+  end
+end

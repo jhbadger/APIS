@@ -340,9 +340,9 @@ class DBwrapper
     name = ""
     tax = [""]*7
     while (name != "root")
-      query = "select parent_id, name, rank from combodb.taxonomy WHERE tax_id = #{taxid}"
+      query = "select parent_id, name, rank from taxonomy WHERE tax_id = #{taxid}"
       pid, name, rank = selectFirst(query)
-      STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) if verbose
+      STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) #if verbose
       return nil if pid.nil?
       pos = levels.index(rank)
       if (pos.nil?)
