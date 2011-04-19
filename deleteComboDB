@@ -5,13 +5,14 @@ require 'apis'
 require 'ostruct'
 
 opt = OpenStruct.new
-opt.database = "combodb"
+opt.database = "phylodb"
 opt.host = "mysql-lan-pro"
 opt.species = false
 opt.contig = true
 opt.file = nil
 opt.taxonomy = nil
 opt.form = nil
+opt.taxid = false
 
 f = !ARGV.grep("-f").empty?
 ARGV.options {|opts|
@@ -21,6 +22,8 @@ ARGV.options {|opts|
   opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
   opts.on("-c", "--contig", 
 	  "use contig as id (default)") {|t| opt.contig = t}
+  opts.on("-i", "--taxid", 
+	  "use taxid as id") {opt.taxid = true}
   opts.on("-s", "--species", 
 	  "use species as id") {|t| opt.species = t} 
   opts.on("-t", "--taxonomy", 
@@ -43,22 +46,24 @@ ARGV.options {|opts|
 }
 
 if (opt.file)
-  File.new(opt.file).each {|line|
+  File.new(opt.file).each do |line|
     id = line.chomp
     ARGV.push(id)
-  }
+  end
 end
 
 db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
 
-ARGV.each {|id|
+ARGV.each do |id|
   if (opt.species)
     db.deleteContig("species = '#{id}'")
   elsif (opt.taxonomy)
     db.deleteContig("taxonomy like '%#{id}%'")
   elsif (opt.form)
     db.deleteContig("form =  '#{id}'")
+  elsif (opt.taxid)
+    db.deleteContig("taxon_id = '#{id}'")
   else
     db.deleteContig("name = '#{id}'")
   end
-}
+end
