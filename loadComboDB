@@ -40,7 +40,7 @@ File.new(contigs).each {|line|
   acc, len, org, strain, id, tax, form, proteins, rrnas, gc = line.chomp.tr("'","").split("\t")
   if (db.count("contigs where name = '#{acc}'") == 0)
     db.query("INSERT INTO contigs VALUES('#{acc}', '#{org}', '#{strain}', #{id}, " +
-             "'#{tax}', '', '#{opt.supergroup}', '#{form}', '')")
+             "'#{tax}', '', '#{opt.supergroup}', '#{form}', '', '#{Date.today.to_s}')")
     STDERR.printf("Loading contig info for %s %s...\n", acc, org)
   end
   taxHash[acc] = id

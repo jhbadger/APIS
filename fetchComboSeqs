@@ -60,35 +60,26 @@ seqs = []
 if (opt.name)
   seqs = Protein.all(:name => ids) if (!opt.dna)
   seqs = Transcript.all(:name => ids) if (opt.dna)
-elsif (opt.species)
+elsif (opt.species || opt.taxonomy || opt.contig)
   ids.each do |id|
-    Contig.all(:species.like => "%#{id}%").each do |contig|
-      if (opt.dna)
-        seqs.push(contig.transcripts)
-      elsif(opt.molecule)
-        seqs.push(contig)
-      elsif(opt.rna)
-        seqs.push(contig.rrnas)
-      else
-        seqs.push(contig.proteins)
-      end
-    end
-  end
-elsif (opt.taxonomy)
-  ids.each do |id|
-    ids.each do |id|
-      Contig.all(:species.like => "%#{id}%").each do |contig|
-        if (opt.dna)
-          seqs.push(contig.transcripts)
-        elsif(opt.molecule)
-          seqs.push(contig.seq)
-        elsif(opt.rna)
-          seqs.push(contig.rrnas)
-        else
-          seqs.push(contig.proteins)
-        end
-      end
-    end
+    if (opt.species)
+      contigs = Contig.all(:species.like => "%#{id}%")
+    elsif (opt.taxonomy)
+      contigs = Contig.all(:species.like => "%#{id}%")
+    elsif (opt.contig)
+      contigs = Contig.all(:name.like => "%#{id}%")
+   end
+   contigs.each do |contig|
+     if (opt.dna)
+       seqs.push(contig.transcripts)
+     elsif(opt.molecule)
+       seqs.push(contig)
+     elsif(opt.rna)
+       seqs.push(contig.rrnas)
+     else
+       seqs.push(contig.proteins)
+     end
+   end
   end
 end
 
