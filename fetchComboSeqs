@@ -21,7 +21,7 @@ o = OptionParser.new
 o.banner << " id...id..."
 o.on("-c", "--contig", "use contig as search id") {opt.contig = true}
 o.on("-s", "--species", "use species as search id") {opt.species = true}  
-o.on("-n", "--name", "use (exact) sequence name as search id (default)") {opt.name = true}  
+o.on("-n", "--name", "use (exact) sequence name as search id") {opt.name = true}  
 o.on("-t", "--taxonomy", "use taxonomy as search id") {opt.taxonomy = true}
 o.on("-d ", "--database ", String, 
      "query database (default #{opt.database})") {|s| opt.database=s}
@@ -65,9 +65,9 @@ elsif (opt.species || opt.taxonomy || opt.contig)
     if (opt.species)
       contigs = Contig.all(:species.like => "%#{id}%")
     elsif (opt.taxonomy)
-      contigs = Contig.all(:species.like => "%#{id}%")
+      contigs = Contig.all(:taxonomy.like => "%#{id}%")
     elsif (opt.contig)
-      contigs = Contig.all(:name.like => "%#{id}%")
+      contigs = Contig.all(:name => id)
    end
    contigs.each do |contig|
      if (opt.dna)
