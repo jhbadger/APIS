@@ -1,13 +1,13 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'apis'
+require 'dm-core'
 require 'ostruct'
 
 opt = OpenStruct.new
 opt.all = false
 opt.storage = "misc_apis"
-opt.host = "mysql-lan-pro.jcvi.org"
+opt.host = "mysql://access:access@mysql-lan-pro"
 
 ARGV.options {|opts|
   opts.banner << " [dataset .. dataset..]"
@@ -27,22 +27,20 @@ ARGV.options {|opts|
   end
 }
 
-storage = MyDB.new(opt.host, opt.storage, "access", "access")
+DataMapper.setup(:default, "#{opt.host}/#{opt.storage}") 
 
 if (opt.all)
-  storage.query("select dataset from dataset").each {|dataset|
-    ARGV.push(dataset[0])
-  }
+  repository(:default).adapter.select("SELECT dataset FROM dataset").each do |dataset|
+    ARGV.push(dataset)
+  end
 end
 
-ARGV.each {|dataset|
+ARGV.each do |dataset|
   STDERR.printf("Processing %s...\n", dataset)
   date = ""
-  storage.query("SELECT date_added FROM dataset where dataset = '#{dataset}'").each {|row|
-    date = row[0]
-  }
-  num = storage.count("sequence WHERE dataset = '#{dataset}'")
-  complete = storage.count("sequence WHERE dataset = '#{dataset}' AND processed = 1")
+  date = repository(:default).adapter.select("SELECT date_added FROM dataset WHERE dataset = '#{dataset}'").first
+  num = repository(:default).adapter.select("SELECT count(*) FROM sequence WHERE dataset = '#{dataset}'").first
+  complete = repository(:default).adapter.select("SELECT count(*) FROM sequence WHERE dataset = '#{dataset}' AND processed = 1").first
   printf("%s\t%s\t%d\t%d\t%d%%\n", dataset, date, num, complete, 
          complete*100/num)
-}
+end
