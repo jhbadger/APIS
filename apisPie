@@ -5,6 +5,7 @@ require 'ostruct'
 require 'dm-core'
 require 'ApisDB'
 require 'gchart'
+require 'csv'
 
 opt = OpenStruct.new
 opt.all = false
@@ -12,12 +13,14 @@ opt.level = 2
 opt.storage = "misc_apis" 
 opt.host = "mysql://access:access@mysql-lan-pro"
 opt.num = false
+opt.prop = false
 
 ARGV.options do |opts|
   opts.banner << " [dataset .. dataset..]"
   opts.on("-a", "--all", "make graphs for all datasets in database") {|t| opt.all = t}
   opts.on("-l ", "--level ", Integer,
           "taxonomic level (default #{opt.level})") {|t| opt.level = t}
+  opts.on("-p ", "--property ", String, "metadata property to group by") {|t| opt.prop = t}
   opts.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
   opts.on("-n", "--numbers", "include numbers on pie chart (default #{opt.num})") {opt.num = true}
@@ -28,7 +31,7 @@ ARGV.options do |opts|
     STDERR.puts opts
     exit(1)
   end
-  if (ARGV.size < 1 && !opt.all)
+  if (ARGV.size < 1 && !opt.all && !opt.prop)
     STDERR.puts opts
     exit(1)
   end
@@ -42,11 +45,27 @@ out = File.new("chart_#{rank}.html", "w")
 
 if (opt.all)
   sets = []
-  Dataset.all.each do |dataset|
-    sets.push(dataset.id)
+  query = "SELECT distinct dataset FROM classification"
+  repository(:default).adapter.select(query).each do |dataset|
+    sets.push(dataset)
   end
 else
   sets = ARGV
+end
+
+metadata = Hash.new
+if (opt.prop)
+  sets = []
+  query = "SELECT dataset, value FROM metadata WHERE prop = '#{opt.prop}'"
+  repository(:default).adapter.select(query).each do |row|
+    metadata[row.value] = "IN (" if metadata[row.value].nil?
+    sets.push(row.value) if (!sets.include?(row.value))
+    metadata[row.value] += "'#{row.dataset}',"
+  end
+  metadata.keys.each do |value|
+    metadata[value].chop!
+    metadata[value] += ")"
+  end
 end
 
 
@@ -57,11 +76,15 @@ sets.each do |dataset|
   counts = Hash.new
   total = 0
   # GROUP BY not supported by DataMapper, so raw SQL
-  query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
+  if (opt.prop)
+    query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset #{metadata[dataset]} GROUP BY #{rank}"
+  else
+    query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
+  end
   repository(:default).adapter.select(query).each do |row|
-    next if row["taxon"] == "Undefined"
-    counts[row["taxon"]] = row["num"]
-    total += row["num"].to_f / 100
+    next if row.taxon == "Undefined"
+    counts[row.taxon] = row["num"]
+    total += row.num.to_f / 100
   end
   percents[dataset] = Hash.new
   counts["Misc"] = 0
@@ -71,11 +94,6 @@ sets.each do |dataset|
     percents[dataset][key] = counts[key]/total if total > 0
   end
 
-  printf("\nCategory in #{dataset}, Counts, Percent\n")
-  percents[dataset].keys.sort {|x,y| percents[dataset][y] <=> percents[dataset][x]}.each do |key|
-    printf("%s,%d,%5.2f\n", key, counts[key], percents[dataset][key]) if (percents[dataset][key]> 0.0)
-  end
-  
   counts.keys.each do |key|
     if (percents[dataset][key] < 2 && key != "Misc")
       percents[dataset]["Misc"] += percents[dataset][key]
@@ -116,9 +134,12 @@ y = radius*2
 num = 0
 
 
+print (["Dataset"] + taxa.keys.sort).to_csv
+
 out.printf("<center><H1>#{rank.capitalize} level breakdown</H1></center><BR>\n")
 percents.keys.sort.each do |dataset|
   STDERR.printf("Drawing chart for %s...\n", dataset)
+  print ([dataset] + taxa.keys.sort.collect{|x| percents[dataset][x].to_f}).to_csv
   data = percents[dataset].values
   legend = percents[dataset].keys
   glegend = legend.dup
