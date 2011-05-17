@@ -338,6 +338,7 @@ def stockholm2Fasta(fastaFile, stockFile)
   File.new(stockFile).each do |line|
     if (line =~/^[A-Z|a-z|0-9]/)
       name, data = line.chomp.split(" ")
+      data = data.gsub(".","-")
       if (seqs[name].nil?)
         seqs[name] = data
       else
