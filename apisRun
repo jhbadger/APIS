@@ -67,7 +67,8 @@ o.on("-u ", "--user ", String,
      "db user (default #{opt.user})") {|t| opt.user = t}
 o.on("-w ", "--password ", String, 
      "db password (default #{opt.password})") {|t| opt.password = t}
-o.on(nil, "--timelogic", "use Timelogic Server (default #{opt.timelogic})") {opt.timelogic = true}
+o.on("-v ", "--timelogic ", 
+     "use timelogic server:user:password (default #{opt.timelogic})") {|t| opt.timelogic = t}
 o.on("-x", "--skipBlast", 
      "skip blast step (default #{opt.skipBlast})") {opt.skipBlast = true}
 o.on("-y ", "--exclude ", String,

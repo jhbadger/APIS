@@ -228,6 +228,11 @@ end
 
 # runs blast job on TimeLogic Server
 def runTimeLogic(prot, storage, dataset, opt)
+  server, user, password = opt.timelogic.split(":")
+  if (password.nil?)
+    STDERR.printf("To use TimeLogic you must supply server:user:password (eg. tmlsrv2:cventer:darwin)\n")
+    exit(1)
+  end
   if (storage.count("blast where dataset = '#{dataset}'") == 0)
     STDERR.printf("Currently creating blast on Timelogic Server...\n")
     STDERR.flush
@@ -236,6 +241,7 @@ def runTimeLogic(prot, storage, dataset, opt)
     command += "-database " + File.basename(storage.blastdb, ".pep") + " "
     command += "-threshold significance=#{opt.evalue} "
     command += "-max_alignments #{opt.maxHits} "
+    command += "-server #{server} -user #{user} -password #{password} "
     command += "-output_format tab "
     command += "-field querylocus targetlocus targetdescription targetlength "
     command += "querystart queryend targetstart targetend percentalignment "
