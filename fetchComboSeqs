@@ -14,6 +14,7 @@ opt.dna = false
 opt.rna = false
 opt.molecule = false
 opt.file = false
+opt.form = false
 opt.database = "phylodb"
 
 
@@ -22,6 +23,7 @@ o.banner << " id...id..."
 o.on("-c", "--contig", "use contig as search id") {opt.contig = true}
 o.on("-s", "--species", "use species as search id") {opt.species = true}  
 o.on("-n", "--name", "use (exact) sequence name as search id") {opt.name = true}  
+o.on("-g", "--form", "use contig form as search id") {opt.form = true}  
 o.on("-t", "--taxonomy", "use taxonomy as search id") {opt.taxonomy = true}
 o.on("-d ", "--database ", String, 
      "query database (default #{opt.database})") {|s| opt.database=s}
@@ -60,12 +62,14 @@ seqs = []
 if (opt.name)
   seqs = Protein.all(:name => ids) if (!opt.dna)
   seqs = Transcript.all(:name => ids) if (opt.dna)
-elsif (opt.species || opt.taxonomy || opt.contig)
+elsif (opt.species || opt.taxonomy || opt.contig || opt.form)
   ids.each do |id|
     if (opt.species)
       contigs = Contig.all(:species.like => "%#{id}%")
     elsif (opt.taxonomy)
       contigs = Contig.all(:taxonomy.like => "%#{id}%")
+    elsif (opt.form)
+      contigs = Contig.all(:form.like => "%#{id}%")
     elsif (opt.contig)
       contigs = Contig.all(:name => id)
    end
