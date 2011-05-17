@@ -94,7 +94,10 @@ ARGV.each do |dataset|
     printIt = !printIt if (opt.inverse)
     file.print ">#{header}\n#{seq.sequence.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n")}" if printIt
     count += 1
+    begin
     STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
+    rescue
+    end
   end
 end
 file.close if file != STDOUT

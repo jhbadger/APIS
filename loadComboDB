@@ -7,7 +7,7 @@ require 'ostruct'
 require 'date'
 
 opt = OpenStruct.new
-opt.database = "combodb"
+opt.database = "phylodb"
 opt.host = "mysql-lan-pro"
 opt.supergroup = ""
 
@@ -45,6 +45,7 @@ File.new(contigs).each {|line|
   end
   taxHash[acc] = id
 }
+
 
 oldContig = ""
 Bio::FlatFile.new(Bio::FastaFormat, File.new(pep)).each {|seq|
