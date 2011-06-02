@@ -192,7 +192,7 @@ get  "/:db" do |db|
   @title = "APIS: Automated Phylogenetic Inference System: #{db}"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<H1>Choose a Dataset</H1>"
-  if (authenticate(db))
+  if (ENV["WEBTIER"] == "dev" || authenticate(db))
     if (settings.dbs[db])
       @main_content += "<TABLE>\n"
       @main_content += "<TR><TD><A HREF=\"#{db}?sort=dataset\">Name</A></TD>"
@@ -341,7 +341,7 @@ end
 
 # breakdown list
 get "/:db/:dataset/:level" do |db, dataset, level|
-  if (authenticate(db, dataset))
+  if (ENV["WEBTIER"] == "dev" || authenticate(db, dataset))
     @title = "APIS: Automated Phylogenetic Inference System: #{dataset}"
     @project_name = "APIS: Automated Phylogenetic Inference System"
     if (params["seq"] || params["ann"])
