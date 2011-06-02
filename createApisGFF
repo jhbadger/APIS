@@ -1,0 +1,64 @@
+#!/usr/bin/env ruby
+
+# createApisCSV is a script for generating reports from an existing APIS run, or sets of runs. This output can be in the 
+# form of csv file(s) or tab delimited file(s). By default, the sequence name, dataset, seq length, annotation, 
+# classification, and NCBI tax id of the classification are reported, but other fields, such as bootstrap value and the
+# "relaxed" classification can be included
+
+require 'optparse'
+require 'dm-core'
+require 'Newick'
+require 'ostruct'
+require 'csv'
+require 'ComboDB'
+require 'ApisDB'
+
+opt = OpenStruct.new
+
+opt.host = "mysql://access:access@mysql-lan-pro"
+opt.limit = nil
+opt.storage = "misc_apis"
+
+
+ARGV.options {|o|
+  o.banner << " dataset"
+  o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  o.on("-l ", "--limit ", Integer, "limit rows output to number") {|t| opt.limit = t}
+  o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
+  begin
+    o.parse!
+  rescue
+    STDERR << $!.message << "\n"
+    STDERR << o 
+    exit(1)
+  end
+  if (ARGV.size != 1)
+    STDERR << o
+    exit(1)
+  end
+}
+
+dataset = ARGV.shift
+
+DataMapper.setup(:default, opt.host + "/" + opt.storage)
+
+db = repository(:default).adapter
+
+query = "SELECT sequence.seq_name, annotation FROM sequence LEFT JOIN annotation "
+query += "ON annotation.seq_name = sequence.seq_name AND annotation.dataset = sequence.dataset "
+query += "WHERE sequence.dataset = '#{dataset}'"
+query += " LIMIT #{opt.limit}" if opt.limit
+db.select(query).each do |row|
+  contig, start, stop, frame = row.seq_name.split("_")
+  start = start.to_i
+  stop = stop.to_i
+  if (start > stop)
+    start, stop = stop, start
+    strand = "-"
+  else
+    strand = "+"
+  end
+  ann = ""
+  ann = "annotation \"" + row.annotation + "\"" if !row.annotation.nil?
+  printf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%s\n", contig, "APIS", "CDS", start, stop, ".", strand, frame, ann)
+end
