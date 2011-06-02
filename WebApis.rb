@@ -8,6 +8,7 @@ require 'DBwrapper'
 
 helpers do
   
+  
   # return base url
   def base_uri
     return ENV["RACK_BASE_URI"]
@@ -38,16 +39,16 @@ helpers do
   # write html out of a hash for testing purposes
   def hash_to_html(hash)
     html = ""
-    hash.keys.sort.each {|key|
+    hash.keys.sort.each do |key|
       html += (key.to_s + " = " + hash[key].to_s + "<br>\n")
-    }
+    end
     return html
   end
   
   # make pie chart from percents
   def pie(percents)
     data = Hash.new
-    percents.keys.each {|key|
+    percents.keys.each do |key|
       item = key.gsub("Contained within ","")
       item.gsub!("Outgroup of ","")
       if (data[item])
@@ -55,14 +56,14 @@ helpers do
       else
         data[item] = percents[key]
       end
-    }
-    data.keys.each {|key|
+    end
+    data.keys.each do |key|
       if (data[key] < 2.0)
         data["Other"] = 0 if data["Other"].nil?
         data["Other"] += data[key]
         data.delete(key)
       end
-    }
+    end
     chart = Gchart.pie(:theme => :pastel, :data => data.values, 
       :legend => data.keys, :width=>500)
     return "<img src=\"" + chart + "\"/>"
@@ -71,10 +72,10 @@ helpers do
   # displays a line for a single protein
   def seqLine(db, dataset, name, ann)
     line = ""
-    ["blast", "tree", "pdf", "id_pdf", "alignment", "seq"].each {|link|
+    ["blast", "tree", "pdf", "id_pdf", "alignment", "seq"].each do |link|
       line += "<A HREF=\"#{base_uri}/#{db}/#{dataset}/#{name}/#{link}\">"
       line += "#{link}</A> "
-    }
+    end
     ann, rest = ann.to_s.split(" {")
     line += name +"\t" + ann.to_s + "<br>\n"
     return line
@@ -98,12 +99,12 @@ helpers do
     query += "AND #{level}_outgroup = #{outgroup} ORDER BY "
     query += "classification.seq_name"
     count = 0
-    settings.dbs[db].query(query).each {|row|
+    settings.dbs[db].query(query).each do |row|
       name, ann = row
       html += seqLine(db, dataset, name, ann)
       count += 1
       break if count > 1000
-    }
+    end
     settings.dbs[db].close
     return html
   end
@@ -124,10 +125,10 @@ helpers do
     query += "ORDER BY classification.seq_name"
     html = ""
     html += "<H1>#{dataset}: matching #{search}</H1>\n"
-    settings.dbs[db].query(query).each {|row|
+    settings.dbs[db].query(query).each do |row|
       name, ann = row
       html += seqLine(db, dataset, name, ann)
-    }
+    end
     settings.dbs[db].close
     return html
   end
@@ -181,9 +182,9 @@ get "/?" do
   @title = "APIS: Automated Phylogenetic Inference System"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<H1>Choose a Database</H1>"
-  settings.dbs.keys.sort.each {|db|
+  settings.dbs.keys.sort.each do |db|
     @main_content += "<A HREF=\"#{base_uri}/#{db}\">#{db}</a><br>\n"
-  }
+  end
   haml :jcvi
 end
 
@@ -197,24 +198,24 @@ get  "/:db" do |db|
       @main_content += "<TABLE>\n"
       @main_content += "<TR><TD><A HREF=\"#{db}?sort=dataset\">Name</A></TD>"
       @main_content += "<TD><A HREF=\"#{db}?sort=owner\">Owner</A></TD>"
-      @main_content += "<TD><A HREF=\"#{db}?sort=dataset.group\">Group</A></TD>"
       @main_content += "<TD><A HREF=\"#{db}?sort=date_added\">Date</A></TD>"
       params["sort"] = "dataset" if params["sort"].nil?
       @main_content += "<TD><A HREF=\"#{db}?sort=database_used\">Database</A></TD></TR>\n"
-      if (db == "yellowstonelake_apis" || db == "synmeta_apis" || db == "gosi_apis")
-        query = "SELECT dataset, owner, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
-      else
-        query = "SELECT dataset, owner, date_added, database_used, dataset.group FROM dataset ORDER BY #{params["sort"]}"
-      end
-      settings.dbs[db].query(query).each {|row|
-        dataset, owner, date, database, group = row
+      query = "SELECT dataset, owner, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
+      settings.dbs[db].query(query).each do |row|
+        dataset, owner, date, database = row
         @main_content += "<TR>"
-        @main_content += "<TD><A HREF=\"#{db}/#{dataset}\">#{dataset}</a><br></TD>"
+        if (settings.metaname[db][dataset])
+          name = settings.metaname[db][dataset] + " (" + dataset + ")"
+        else
+          name = dataset
+        end
+        @main_content += "<TD><A HREF=\"#{db}/#{dataset}\">#{name}</a><br></TD>"
         if (!database.nil?)
-          @main_content += "<TD>#{owner}</TD><TD>#{group}</TD><TD>#{date}</TD><TD>#{database}</TD>"
+          @main_content += "<TD>#{owner}</TD><TD>#{date}</TD><TD>#{database}</TD>"
         end
         @main_content += "</TR>\n"
-      }
+      end
       @main_content += "</TABLE>\n"
     else
       @main_content = "<H1>No such database as #{db}</H1>"
@@ -234,11 +235,11 @@ get "/:db/:dataset/:seq/blast" do |db, dataset, seq|
   @main_content += "<TABLE><TR>"
   @main_content += ["E-value", "Subject", "Desc", "QStart", "QEnd", "SStart", "End", "Score"].collect {|x| "<TD>#{x}</TD>"}.to_s
   @main_content += "</TR>\n"
-  settings.dbs[db].query("SELECT evalue, subject_name, subject_description, query_start, query_end,  subject_start, subject_end, score FROM blast WHERE dataset='#{dataset}' AND seq_name = '#{seq}' ORDER BY evalue").each {|row|
+  settings.dbs[db].query("SELECT evalue, subject_name, subject_description, query_start, query_end,  subject_start, subject_end, score FROM blast WHERE dataset='#{dataset}' AND seq_name = '#{seq}' ORDER BY evalue").each do |row|
     @main_content += "<TR>"
     @main_content += row.collect {|x| "<TD>#{x}</TD>"}.to_s
     @main_content += "</TR>\n"
-  }
+  end
   @main_content += "</TABLE>"
   settings.dbs[db].close
   haml :jcvi
@@ -251,14 +252,14 @@ get "/:db/:dataset/:seq/tree" do |db, dataset, seq|
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = ""
   tree = ""
-  settings.dbs[db].query("SELECT tree FROM tree WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each {|row|
+  settings.dbs[db].query("SELECT tree FROM tree WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     tree += row[0]
-  }
-  tree.split(",").each {|part|
+  end
+  tree.split(",").each do |part|
     @main_content += part 
     @main_content += "," if (!part.index(");"))
     @main_content += "<BR>\n"
-  }
+  end
   settings.dbs[db].close
   haml :jcvi
 end
@@ -289,11 +290,11 @@ end
       raw = false
     end
     pdf = ""
-    settings.dbs[db].query("SELECT tree FROM tree WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each {|row|
+    settings.dbs[db].query("SELECT tree FROM tree WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
       tree = NewickTree.new(row[0])
       pdf = tree.draw("--#{seq}", boot="width", linker = :phyLink, labelName = false,
       highlights = Hash.new, brackets = nil, rawNames = raw)
-    }
+    end
     settings.dbs[db].close
     return [200, {"Content-Type" => "application/pdf"}, pdf]
   end
@@ -307,12 +308,12 @@ get "/:db/:dataset/:seq/seq" do |db, dataset, seq|
   @main_content = ""
   seqdata = ""
   ann = ""
-  settings.dbs[db].query("SELECT sequence FROM sequence WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each {|row|
+  settings.dbs[db].query("SELECT sequence FROM sequence WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     seqdata = row[0]
-  }
-  settings.dbs[db].query("SELECT annotation FROM annotation WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each {|row|
+  end
+  settings.dbs[db].query("SELECT annotation FROM annotation WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     ann = row[0] if (!row[0].nil?)
-  }
+  end
   s = Bio::Sequence::AA.new(seqdata).to_fasta(seq + " " + ann, 60)
   @main_content += s.gsub("\n","<BR>\n")
   settings.dbs[db].close
@@ -325,10 +326,10 @@ get "/:db/:dataset/:seq/alignment" do |db, dataset, seq|
   @title = "APIS: Automated Phylogenetic Inference System: #{seq} alignment"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<pre>\n"
-  settings.dbs[db].query("SELECT alignment_name, alignment_desc, alignment_sequence FROM alignment WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each {|row|
+  settings.dbs[db].query("SELECT alignment_name, alignment_desc, alignment_sequence FROM alignment WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     name, desc, seq = row
     @main_content += Bio::Sequence::AA.new(seq).to_fasta(name + " " + desc, 60)
-  }
+  end
   @main_content += "</pre>\n"
   settings.dbs[db].close
   haml :jcvi
@@ -342,7 +343,12 @@ end
 # breakdown list
 get "/:db/:dataset/:level" do |db, dataset, level|
   if (ENV["WEBTIER"] == "dev" || authenticate(db, dataset))
-    @title = "APIS: Automated Phylogenetic Inference System: #{dataset}"
+    if (settings.metaname[db][dataset])
+      name = settings.metaname[db][dataset] + " (" + dataset + ")"
+    else
+      name = dataset
+    end
+    @title = "APIS: Automated Phylogenetic Inference System: #{name}"
     @project_name = "APIS: Automated Phylogenetic Inference System"
     if (params["seq"] || params["ann"])
       @main_content = search(db, dataset, params)
@@ -353,7 +359,7 @@ get "/:db/:dataset/:level" do |db, dataset, level|
       @main_content += "<FORM METHOD=get ACTION=\"#{base_uri}/#{db}/#{dataset}/#{level}\">\n"
       @main_content +="<INPUT TYPE=text NAME=\"seq\">\n"
       @main_content += "Search for ORF number</FORM>\n"
-      @main_content += "<H1>#{level.capitalize} breakdown for #{dataset}</H1>\n"
+      @main_content += "<H1>#{level.capitalize} breakdown for #{name}</H1>\n"
       tot = settings.dbs[db].count("sequence WHERE dataset = '#{dataset}'")
       processed = settings.dbs[db].count("sequence WHERE dataset = '#{dataset}' AND processed = 1")
       counts = Hash.new
@@ -361,7 +367,7 @@ get "/:db/:dataset/:level" do |db, dataset, level|
       query =  "SELECT #{level}, #{level}_outgroup, COUNT(*) FROM "
       query += "classification WHERE dataset ='#{dataset}' "
       query += "GROUP BY #{level}, #{level}_outgroup"
-      settings.dbs[db].query(query).each {|row|
+      settings.dbs[db].query(query).each do |row|
         taxon, outgroup, num = row
         outgroup = outgroup.to_i
         num = num.to_i
@@ -371,21 +377,21 @@ get "/:db/:dataset/:level" do |db, dataset, level|
         else
           counts["Outgroup of " + taxon] = num
         end
-      }
+      end
       @main_content += "<TABLE>\n<TR><TD>\n"
       @main_content += "#{processed} of #{tot} sequences analyzed (#{(processed*1000/tot)/10}%)<br>"
       @main_content += "#{total} of #{tot} sequences with trees (#{(total*1000/tot)/10}%)<br><br>"
-      ["kingdom", "phylum", "class", "ord", "family", "genus", "species"].each {|tax|
+      ["kingdom", "phylum", "class", "ord", "family", "genus", "species"].each do |tax|
         @main_content += "<A HREF=\"#{base_uri}/#{db}/#{dataset}/#{tax}\">#{tax}</a>\n"
-      }
+      end
       @main_content += "<p>\n"
       percents = Hash.new
-      counts.keys.sort {|x,y| counts[y] <=> counts[x]}.each {|key|
+      counts.keys.sort {|x,y| counts[y] <=> counts[x]}.each do |key|
         percents[key] = counts[key]*100.0/total
         @main_content += sprintf("%7d (%3.1f%%)", counts[key], percents[key])
         @main_content += sprintf("<A HREF=\"%s/%s/%s/%s/%s\">%s</a><br>\n",
         base_uri, db, dataset, level, key.gsub(" ","_"),  key)
-      }
+      end
       @main_content += "</TD><TD VALIGN=\"top\">\n"
       @main_content += pie(percents)
       @main_content += "</TD></TR></TABLE>\n"
@@ -414,12 +420,12 @@ get  "/:db/:dataset/:level/:group" do |db, dataset, level, group|
   query += "AND #{level}_outgroup = #{outgroup} ORDER BY "
   query += "classification.seq_name"
   count = 0
-  settings.dbs[db].query(query).each {|row|
+  settings.dbs[db].query(query).each do |row|
     name, ann = row
     @main_content += seqLine(db, dataset, name, ann)
     count += 1
     break if count > 1000
-  }
+  end
   settings.dbs[db].close
   haml :jcvi
 end

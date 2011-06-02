@@ -51,7 +51,6 @@ class DBwrapper
         db.query("SHOW DATABASES").each {|row|
           dbname = row[0]
           if (dbname =~/_apis/)
-            next if dbname == "gos_io_apis" || dbname == "compdb_apis" || dbname == "gos_assembly_apis"
             dbs[dbname] = MyDB.new(host, dbname, user, password)
             dbs[dbname].close
           end
@@ -62,6 +61,21 @@ class DBwrapper
     return dbs
   end
 
+  # return hash of human readable dataset names from metadata table where it exists
+  def self.populateMetaName(dbs)
+    metaName = Hash.new
+    dbs.keys.each do |dbname|
+      metaName[dbname] = Hash.new
+      table = dbs[dbname].get("SHOW TABLES WHERE tables_in_#{dbname} = 'metadata'").to_s
+      if (table != "")
+        dbs[dbname].query("SELECT dataset, value FROM metadata WHERE prop='name'").each do |row|
+          metaName[dbname][row.first] = row.last
+        end
+      end
+    end
+    return metaName
+  end
+  
   def count(condition)
     connect if (!@connected)
     query = "SELECT count(*) FROM #{condition}"

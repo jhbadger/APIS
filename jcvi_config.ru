@@ -4,11 +4,15 @@ require 'WebApis'
 
 set :environment, :production
 set :show_exceptions, true
+
+
 if (ENV["WEBTIER"] != "prod")
   set :dbs, DBwrapper.dbsFromSources(["mysql-lan-pro", "mysql-lan-dtw"], 
   "access", "access")
 else
   set :dbs, DBwrapper.dbsFromSources(["mysql-dmz-dtw"], "access", "access")
 end
+
+set :metaname, DBwrapper.populateMetaName(settings.dbs)
 
 run Sinatra::Application
