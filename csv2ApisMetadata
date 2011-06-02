@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+
+require 'dm-core'
+require 'optparse'
+require 'ostruct'
+require 'csv'
+
+opt = OpenStruct.new
+
+
+o = OptionParser.new
+o.banner << " csv"
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size != 1)
+  STDERR << o
+  exit(1)
+end
+
+csv, rest = ARGV
+
+CSV.foreach(csv, options = {:headers => true, :converters => :numeric}) do |row|
+  if (!row["dataset"])
+    STDERR << "No dataset for row starting with " << row.first << "...\n"
+  else
+    row.each do |pair|
+      next if pair.first == "dataset" || pair.first.nil?
+      printf("%s\t%s\t%s\n", row["dataset"], pair.first.downcase, pair.last.to_s.gsub("\t",""))
+    end
+  end
+end

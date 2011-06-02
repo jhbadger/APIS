@@ -13,14 +13,18 @@ helpers do
     return ENV["RACK_BASE_URI"]
   end
 
-  #authenicate user and password for a given dataset
-  def authenticate(db, dataset, username = nil, password = nil)
+  #authenicate user and password for a given database or dataset
+  def authenticate(db, dataset = nil, username = nil, password = nil)
     if (username.nil?)
       username = session["username"]
       password = session["password"]
     end
     begin 
-      u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+      if (dataset.nil?)
+        u, p = settings.dbs[db].selectFirst("SELECT username, password FROM password")
+      else 
+        u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+      end
     rescue
       u = "" # no user/password in dataset
     end
@@ -132,24 +136,30 @@ end
 enable :sessions
 
 
-# login form for given db
-get "/login/:db/:dataset" do |db, dataset|
-  @title = "APIS: Automated Phylogenetic Inference System"
-  @project_name = "APIS: Automated Phylogenetic Inference System"
-  u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
-  @main_content = "<H1>Login to #{dataset}</H1>"
-  @main_content += "<FORM METHOD=post ACTION=\"#{base_uri}/validate/#{db}/#{dataset}\">\n"
-  @main_content += "Username: "
-  @main_content +="<INPUT TYPE=text NAME=\"username\">\n"
-  @main_content += "Password: "
-  @main_content +="<INPUT TYPE=text NAME=\"password\">\n"
-  @main_content +="<INPUT TYPE=submit VALUE=send class=button>"
-  @main_content += "</FORM>"
-  haml :jcvi
+# login form for given db or dataset
+["/login/*/*", "/login/*"].each do |path|
+  get path do |db, dataset|
+    @title = "APIS: Automated Phylogenetic Inference System"
+    @project_name = "APIS: Automated Phylogenetic Inference System"
+    if (dataset.nil?)
+      u, p = settings.dbs[db].selectFirst("SELECT username, password FROM password")
+    else
+      u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+    end
+    @main_content = "<H1>Login to #{db} #{dataset}</H1>"
+    @main_content += "<FORM METHOD=post ACTION=\"#{base_uri}/validate/#{db}/#{dataset}\">\n"
+    @main_content += "Username: "
+    @main_content +="<INPUT TYPE=text NAME=\"username\">\n"
+    @main_content += "Password: "
+    @main_content +="<INPUT TYPE=text NAME=\"password\">\n"
+    @main_content +="<INPUT TYPE=submit VALUE=send class=button>"
+    @main_content += "</FORM>"
+    haml :jcvi
+  end
 end
 
 # handle login info and reauthenicate
-post "/validate/:db/:dataset" do |db, dataset|
+post "/validate/*/*" do |db, dataset|
   username = params[:username]
   password = params[:password]
   if (authenticate(db, dataset, username, password))
@@ -174,37 +184,41 @@ get "/?" do
 end
 
 # dataset lists
-get  "/:db" do |db|
+get  "/:db/?" do |db|
   @title = "APIS: Automated Phylogenetic Inference System: #{db}"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<H1>Choose a Dataset</H1>"
-  if (settings.dbs[db])
-    @main_content += "<TABLE>\n"
-    @main_content += "<TR><TD><A HREF=\"#{db}?sort=dataset\">Name</A></TD>"
-    @main_content += "<TD><A HREF=\"#{db}?sort=owner\">Owner</A></TD>"
-    @main_content += "<TD><A HREF=\"#{db}?sort=dataset.group\">Group</A></TD>"
-    @main_content += "<TD><A HREF=\"#{db}?sort=date_added\">Date</A></TD>"
-    params["sort"] = "dataset" if params["sort"].nil?
-    @main_content += "<TD><A HREF=\"#{db}?sort=database_used\">Database</A></TD></TR>\n"
-    if (db == "yellowstonelake_apis" || db == "synmeta_apis" || db == "gosi_apis")
-      query = "SELECT dataset, owner, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
-    else
-      query = "SELECT dataset, owner, date_added, database_used, dataset.group FROM dataset ORDER BY #{params["sort"]}"
-    end
-    settings.dbs[db].query(query).each {|row|
-      dataset, owner, date, database, group = row
-      @main_content += "<TR>"
-      @main_content += "<TD><A HREF=\"#{db}/#{dataset}\">#{dataset}</a><br></TD>"
-      if (!database.nil?)
-        @main_content += "<TD>#{owner}</TD><TD>#{group}</TD><TD>#{date}</TD><TD>#{database}</TD>"
+  if (authenticate(db))
+    if (settings.dbs[db])
+      @main_content += "<TABLE>\n"
+      @main_content += "<TR><TD><A HREF=\"#{db}?sort=dataset\">Name</A></TD>"
+      @main_content += "<TD><A HREF=\"#{db}?sort=owner\">Owner</A></TD>"
+      @main_content += "<TD><A HREF=\"#{db}?sort=dataset.group\">Group</A></TD>"
+      @main_content += "<TD><A HREF=\"#{db}?sort=date_added\">Date</A></TD>"
+      params["sort"] = "dataset" if params["sort"].nil?
+      @main_content += "<TD><A HREF=\"#{db}?sort=database_used\">Database</A></TD></TR>\n"
+      if (db == "yellowstonelake_apis" || db == "synmeta_apis" || db == "gosi_apis")
+        query = "SELECT dataset, owner, date_added, database_used FROM dataset ORDER BY #{params["sort"]}"
+      else
+        query = "SELECT dataset, owner, date_added, database_used, dataset.group FROM dataset ORDER BY #{params["sort"]}"
       end
-      @main_content += "</TR>\n"
-    }
-    @main_content += "</TABLE>\n"
+      settings.dbs[db].query(query).each {|row|
+        dataset, owner, date, database, group = row
+        @main_content += "<TR>"
+        @main_content += "<TD><A HREF=\"#{db}/#{dataset}\">#{dataset}</a><br></TD>"
+        if (!database.nil?)
+          @main_content += "<TD>#{owner}</TD><TD>#{group}</TD><TD>#{date}</TD><TD>#{database}</TD>"
+        end
+        @main_content += "</TR>\n"
+      }
+      @main_content += "</TABLE>\n"
+    else
+      @main_content = "<H1>No such database as #{db}</H1>"
+    end
+    haml :jcvi
   else
-    @main_content = "<H1>No such database as #{db}</H1>"
+    redirect "#{base_uri}/login/#{db}/"
   end
-  haml :jcvi
 end
 
 # BLAST results
