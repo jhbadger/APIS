@@ -7,12 +7,13 @@ set :show_exceptions, true
 
 
 if (ENV["WEBTIER"] != "prod")
-  set :dbs, DBwrapper.dbsFromSources(["mysql-lan-pro", "mysql-lan-dtw"], 
+  dbs = DBwrapper.dbsFromSources(["mysql-lan-pro", "mysql-lan-dtw"], 
   "access", "access")
 else
-  set :dbs, DBwrapper.dbsFromSources(["mysql-dmz-dtw"], "access", "access")
+  dbs = DBwrapper.dbsFromSources(["mysql-dmz-dtw"], "access", "access")
 end
 
-set :metaname, DBwrapper.populateMetaName(settings.dbs)
+set :dbs, dbs
+set :metaname, DBwrapper.populateMetaName(dbs)
 
 run Sinatra::Application
