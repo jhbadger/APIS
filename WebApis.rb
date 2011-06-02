@@ -169,7 +169,11 @@ post "/validate/*/*" do |db, dataset|
     session["username"] = nil
     session["password"] = nil
   end
-  redirect "#{base_uri}/#{db}/#{dataset}"
+  if (dataset != "")
+    redirect "#{base_uri}/#{db}/#{dataset}"
+  else
+    redirect "#{base_uri}/#{db}"
+  end    
 end
 
 # root of web app
@@ -184,7 +188,7 @@ get "/?" do
 end
 
 # dataset lists
-get  "/:db/?" do |db|
+get  "/:db" do |db|
   @title = "APIS: Automated Phylogenetic Inference System: #{db}"
   @project_name = "APIS: Automated Phylogenetic Inference System"
   @main_content = "<H1>Choose a Dataset</H1>"

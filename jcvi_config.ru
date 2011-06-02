@@ -10,3 +10,5 @@ if (ENV["WEBTIER"] != "prod")
 else
   set :dbs, DBwrapper.dbsFromSources(["mysql-dmz-dtw"], "access", "access")
 end
+
+run Sinatra::Application
