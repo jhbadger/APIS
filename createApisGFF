@@ -44,8 +44,9 @@ DataMapper.setup(:default, opt.host + "/" + opt.storage)
 
 db = repository(:default).adapter
 
-query = "SELECT sequence.seq_name, annotation FROM sequence LEFT JOIN annotation "
-query += "ON annotation.seq_name = sequence.seq_name AND annotation.dataset = sequence.dataset "
+query = "SELECT sequence.seq_name, kingdom, phylum, class AS cl, ord, family, genus, species, annotation FROM sequence "
+query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name AND classification.dataset = sequence.dataset "
+query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name AND annotation.dataset = sequence.dataset "
 query += "WHERE sequence.dataset = '#{dataset}'"
 query += " LIMIT #{opt.limit}" if opt.limit
 db.select(query).each do |row|
@@ -59,6 +60,13 @@ db.select(query).each do |row|
     strand = "+"
   end
   ann = ""
-  ann = "annotation \"" + row.annotation + "\"" if !row.annotation.nil?
+  ann += "annotation \"" + row.annotation + "\" " if !row.annotation.nil?
+  ann += "kingdom \"" + row.kingdom + "\" " if !row.kingdom.nil?
+  ann += "phylum \"" + row.phylum + "\" " if !row.phylum.nil?
+  ann += "class \"" + row.cl + "\" " if !row.cl.nil?
+  ann += "order \"" + row.ord + "\" " if !row.ord.nil?
+  ann += "family \"" + row.family + "\" " if !row.family.nil?
+  ann += "genus \"" + row.genus + "\" " if !row.genus.nil?
+  ann += "species \"" + row.species + "\" " if !row.species.nil?
   printf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%s\n", contig, "APIS", "CDS", start, stop, ".", strand, frame, ann)
 end

@@ -169,6 +169,7 @@ def asProt(fasta, minOrf, verbose = nil, dna = false)
             frame = frame.to_i + 1
             subseq = seq.subseq(s, e)
             next if (subseq.length < 3*minOrf)
+            id.gsub!("/","!")
             if (strand == "+")
               trans = subseq.translate(frame, 11)
               out.print trans.to_fasta("#{id}_#{s}_#{e}_#{frame}", 60)
