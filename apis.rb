@@ -257,7 +257,7 @@ def runTimeLogic(prot, storage, dataset, opt)
         tstart, tend, ident, pos, score, sig = line.chomp.split("\t")
       count += 1 if (oldQuery != query)
       oldQuery = query
-      if (count % 1000 == 0)
+      if (count % 100 == 0)
         storage.insert("blast", brows)
         brows = []
         STDERR.printf("Loading blast for sequence %d...\n", count)
