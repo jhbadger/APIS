@@ -76,6 +76,9 @@ ARGV.each {|gb|
   Bio::FlatFile.new(Bio::GenBank, File.new(gb)).each {|genome|
     acc = genome.accession
     acc = genome.locus.entry_id if acc == ""
+    orfname = "ORF0000"
+    rrnaname ="A"
+    trnaname = "0000"
     proteins = 0
     trnas = 0
     rrnas = 0
@@ -129,8 +132,11 @@ ARGV.each {|gb|
           gi = hash["db_xref"].grep(/GI:/).first
         elsif hash["locus_tag"]
           gi = hash["locus_tag"].first
+        elsif (hash["protein_id"])
+          gi = hash["protein_id"].firstrst
         else
-          gi = hash["protein_id"].first
+          gi = orfname.succ!
+          locus = orfname if locus.nil?
         end
 	      next if gi.nil?
 	      key = 	header = gi.downcase.tr(":","") + "-" + acc
@@ -147,6 +153,10 @@ ARGV.each {|gb|
 	      locations.first.strand.to_s + "\t" + product + "\n"
 	      proteins += 1
       elsif feature["product"].to_s =~ /ribosomal RNA/i # rRNA
+        if (locus.nil?)
+          locus = rrnaname
+          rrnaname.succ!
+        end 
 	      key = "rRNA-" + locus.to_s + "-" + acc.to_s
 	      header = key + " " + product.to_s
 	      seq = getSequence(dna, locations)
@@ -156,6 +166,10 @@ ARGV.each {|gb|
 	      locations.first.strand.to_s + "\t" + product + "\n"
 	      rrnas += 1
       elsif feature["product"].to_s =~ /tRNA/i # tRNA
+        if (locus.nil?)
+          locus = trnaname
+          trnaname.succ!
+        end
 	      key = "tRNA-" + locus.to_s + "-" + acc.to_s
 	      header = key.to_s + " " + product.to_s
 	      seq = getSequence(dna, locations)
