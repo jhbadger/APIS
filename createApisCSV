@@ -112,8 +112,7 @@ if (!datasets.empty?)
     end
     t = "NO_TREE" if t == ""
     if (goodRank != "")
-      tid = repository(:combodb).adapter.select("select ncbi_taxon_id from phylodb_annotation.taxon, phylodb_annotation.taxon_name " + 
-        "where name = '#{goodRank}' and phylodb_annotation.taxon.taxon_id = phylodb_annotation.taxon_name .taxon_id limit 1").first
+      tid = repository(:combodb).adapter.select("select taxon_id from phylodb.taxonomy where name = '#{goodRank}' limit 1").first
     end
     return t, tid
   end
