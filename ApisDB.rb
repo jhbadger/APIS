@@ -88,8 +88,8 @@ class Classification
   property :phylum_outgroup, Boolean, :index => true
   property :classname, String, :field => "class", :length => 50, :index => true
   property :class_outgroup, Boolean, :index => true
-  property :order, String, :field => "ord", :length => 50, :index => true
-  property :order_outgroup, Boolean, :field => "ord_outgroup", :index => true
+  property :ord, String, :length => 50, :index => true
+  property :ord_outgroup, Boolean, :index => true
   property :family, String, :length => 50, :index => true
   property :family_outgroup, Boolean, :index => true
   property :genus, String, :length => 50, :index => true
@@ -98,7 +98,7 @@ class Classification
   property :species_outgroup, Boolean, :index => true
   def to_s
     s = ""
-    [kingdom, phylum, classname, order, family, genus, species].each do |level|
+    [kingdom, phylum, classname, ord, family, genus, species].each do |level|
       s += (level + "; ") #if (level != "Mixed" && level != "Undefined")
     end
     return s    
