@@ -71,6 +71,9 @@ class DBwrapper
         dbs[dbname].query("SELECT dataset, value FROM metadata WHERE prop='name'").each do |row|
           metaName[dbname][row.first] = row.last
         end
+        dbs[dbname].query("SELECT dataset, value FROM metadata WHERE prop='location'").each do |row|
+          metaName[dbname][row.first] += " " + row.last
+        end
       end
     end
     return metaName
