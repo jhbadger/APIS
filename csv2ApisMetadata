@@ -6,11 +6,14 @@ require 'ostruct'
 require 'csv'
 
 opt = OpenStruct.new
-
+opt.host = "mysql://access:access@mysql-lan-pro"
+opt.storage = "misc_apis"
 
 o = OptionParser.new
 o.banner << " csv"
 begin
+  o.on("-h ", "--host ", String, "database host (#{opt.host})") {|t| opt.host = t}
+  o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.parse!
 rescue
   STDERR << $!.message << "\n"
@@ -24,13 +27,30 @@ end
 
 csv, rest = ARGV
 
+DataMapper.setup(:default, opt.host + "/" + opt.storage)
+db = repository(:default).adapter
+
+datasets = db.select("SELECT dataset FROM dataset")
+seen = Hash.new
+
 CSV.foreach(csv, options = {:headers => true, :converters => :numeric}) do |row|
   if (!row["dataset"])
     STDERR << "No dataset for row starting with " << row.first << "...\n"
-  else
+    next
+  end
+  if (!row["name"])
+    row["name"] = row["site"] + "_" + row["filter"].to_s
+  end
+  datasets.grep(/#{row["dataset"]}/).each do |dataset|
     row.each do |pair|
       next if pair.first == "dataset" || pair.first.nil?
-      printf("%s\t%s\t%s\n", row["dataset"], pair.first.downcase, pair.last.to_s.gsub("\t",""))
+      printf("%s\t%s\t%s\n", dataset, pair.first.downcase, pair.last.to_s.gsub("\t",""))
+      seen[dataset] = true
     end
   end
+end
+
+missing = datasets - seen.keys
+missing.each do |dataset|
+  STDERR << "Warning: no info for dataset " << dataset << "\n"
 end
