@@ -18,10 +18,12 @@ opt = OpenStruct.new
 opt.host = "mysql://access:access@mysql-lan-pro"
 opt.limit = nil
 opt.storage = "misc_apis"
+opt.ann = false
 
 
 ARGV.options {|o|
   o.banner << " dataset"
+  o.on("-a", "--annotation", "get contig info from input annotation, not orfname") {|t| opt.ann = t}
   o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
   o.on("-l ", "--limit ", Integer, "limit rows output to number") {|t| opt.limit = t}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
@@ -44,13 +46,23 @@ DataMapper.setup(:default, opt.host + "/" + opt.storage)
 
 db = repository(:default).adapter
 
-query = "SELECT sequence.seq_name, kingdom, phylum, class AS cl, ord, family, genus, species, annotation FROM sequence "
+query = "SELECT sequence.seq_name, kingdom, phylum, class AS cl, ord, family, genus, species, input_ann.annotation as in_ann, apis_ann.annotation as ap_ann FROM sequence "
 query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name AND classification.dataset = sequence.dataset "
-query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name AND annotation.dataset = sequence.dataset "
+query += "LEFT JOIN annotation as input_ann ON input_ann.seq_name = sequence.seq_name AND input_ann.dataset = sequence.dataset AND input_ann.source = 'input' "
+query += "LEFT JOIN annotation as apis_ann ON apis_ann.seq_name = sequence.seq_name AND apis_ann.dataset = sequence.dataset AND apis_ann.source = 'APIS' "
+
 query += "WHERE sequence.dataset = '#{dataset}'"
 query += " LIMIT #{opt.limit}" if opt.limit
 db.select(query).each do |row|
-  contig, start, stop, frame = row.seq_name.split("_")
+  frame = 1
+  if (!opt.ann)
+     contig, start, stop = row.seq_name.split("_")
+  else
+    if (row.in_ann =~/\/read_id=([A-Z|a-z|\_|0-9]+) \/begin=([0-9]*) \/end=([0-9]*) \/orientation=([0-9|-]+)/)
+     contig, start, stop, strand = $1, $2, $3, $4
+     start, stop = stop, start if (strand == "-1")
+   end
+  end
   start = start.to_i
   stop = stop.to_i
   if (start > stop)
@@ -60,7 +72,7 @@ db.select(query).each do |row|
     strand = "+"
   end
   ann = ""
-  ann += "annotation \"" + row.annotation + "\" " if !row.annotation.nil?
+  ann += "annotation \"" + row.ap_ann + "\" " if !row.ap_ann.nil?
   ann += "kingdom \"" + row.kingdom + "\" " if !row.kingdom.nil?
   ann += "phylum \"" + row.phylum + "\" " if !row.phylum.nil?
   ann += "class \"" + row.cl + "\" " if !row.cl.nil?
