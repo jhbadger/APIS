@@ -5,7 +5,7 @@ require 'apis'
 require 'ostruct'
 
 opt = OpenStruct.new
-opt.database = "combodb"
+opt.database = "phylodb"
 opt.host = "mysql-lan-pro.jcvi.org"
 opt.delete = false
 opt.print = false
