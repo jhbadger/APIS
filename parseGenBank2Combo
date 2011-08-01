@@ -3,7 +3,7 @@
 require 'optparse'
 require 'bio'
 require 'ostruct'
-require 'Zfile'
+require 'ZFile'
 
 opt = OpenStruct.new
 opt.sep = false
