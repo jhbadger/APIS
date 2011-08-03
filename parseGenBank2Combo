@@ -1,4 +1,6 @@
-#!/usr/bin/env ruby -E ASCII-8BIT
+#!/usr/bin/env ruby
+
+Encoding.default_external="ASCII-8BIT"
 
 require 'optparse'
 require 'bio'
