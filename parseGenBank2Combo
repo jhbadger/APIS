@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env ruby -E ASCII-8BIT
 
 require 'optparse'
 require 'bio'
@@ -145,7 +145,7 @@ ARGV.each do |gb|
           orfname.succ!
         end
         if (translation.nil?) # make one if none given
-          translation = Bio::Sequence::NA.new(cds).translate.seq
+          translation = Bio::Sequence::NA.new(seq).translate.seq
         end
         key = cds_name + "-" + acc
         header = key + " " + product.to_s + " {" + genome.organism + "}"
