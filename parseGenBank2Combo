@@ -77,6 +77,10 @@ end
 org = ""
 ARGV.each do |gb|
   Bio::FlatFile.new(Bio::GenBank, ZFile.new(gb)).each do |genome|
+    organism = genome.organism
+    if (organism == "")
+      organism = genome.definition.split(" ")[0] + " " + genome.definition.split(" ")[1]
+    end
     acc = genome.accession || ""
     acc = genome.locus.entry_id || "" if acc == ""
     if (acc.index("scaffold:")) # EnsEmbl format
@@ -103,9 +107,9 @@ ARGV.each do |gb|
       att = File.new(acc + ".att", "w")
       con = File.new(acc + ".con", "w")
     end
-    if (org != genome.organism)
-      STDERR.printf("Processing %s...\n", genome.organism) if (genome.organism != "")
-		  org = genome.organism  
+    if (org != organism)
+      STDERR.printf("Processing %s...\n", organism) if (organism != "")
+		  org = organism  
 		end
     # process each CDS, rRNA. tRNA
     genome.features.each do |feature|
@@ -150,7 +154,7 @@ ARGV.each do |gb|
           translation = Bio::Sequence::NA.new(seq).translate.seq
         end
         key = cds_name + "-" + acc
-        header = key + " " + product.to_s + " {" + genome.organism + "}"
+        header = key + " " + product.to_s + " {" + organism + "}"
         pep.print Bio::Sequence::AA.new(translation).to_fasta(header, 60)
         cds.print Bio::Sequence::AA.new(seq).to_fasta(header, 60)
         if (gene_location)
@@ -177,7 +181,7 @@ ARGV.each do |gb|
           rnaname.succ!
         end
 	      key = locus.to_s + "-" + acc.to_s
-	      header = key + " " + product.to_s + " {" + genome.organism + "}"
+	      header = key + " " + product.to_s + " {" + organism + "}"
 	      seq = getSequence(dna, feature.locations)
 	      if (product =~/rRNA|ribosomal/i || locus =~/rRNA/i)
 	        out = rna
@@ -205,7 +209,7 @@ ARGV.each do |gb|
       taxonomy = genome.taxonomy.chop
     end
     att.print acc + "\t" + genome.seq.length.to_s + "\t"
-    att.print genome.organism + "\t" + strain + "\t" + taxonid + "\t"
+    att.print organism + "\t" + strain + "\t" + taxonid + "\t"
     att.print taxonomy.gsub(",", "") + "\t" + classifyMolecule(genome.definition) + "\t"
     att.print proteins.to_s + "\t" + rrnas.to_s + "\t" + trnas.to_s + "\t"
     gc =  (dna.count("g") + dna.count("c")) / (1.0 * dna.length)  
