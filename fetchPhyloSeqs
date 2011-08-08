@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 
-require 'dm-core'
-require 'ComboDB'
+require 'PhyloDB'
 require 'optparse'
 require 'ostruct'
+require 'bio'
 
 opt = OpenStruct.new
 opt.name = false
@@ -15,7 +15,6 @@ opt.rna = false
 opt.molecule = false
 opt.file = false
 opt.form = false
-opt.database = "phylodb"
 
 
 o = OptionParser.new
@@ -25,8 +24,6 @@ o.on("-s", "--species", "use species as search id") {opt.species = true}
 o.on("-n", "--name", "use (exact) sequence name as search id") {opt.name = true}  
 o.on("-g", "--form", "use contig form as search id") {opt.form = true}  
 o.on("-t", "--taxonomy", "use taxonomy as search id") {opt.taxonomy = true}
-o.on("-d ", "--database ", String, 
-     "query database (default #{opt.database})") {|s| opt.database=s}
 o.on("-m", "--molecule", 
      "return full DNA molecules of contigs") {opt.molecule = true}  
 o.on("-r", "--rRNA", "return rRNAs, not protein") {opt.rna = true}  
@@ -46,8 +43,6 @@ if (ARGV.size <  1 && !opt.file)
   exit(1)
 end
 
-DataMapper.setup(:default, "mysql://apis:apis_user@mysql-lan-pro/#{opt.database}") 
-
 if (opt.file)
   ids = []
   File.new(opt.file).each do |line|
@@ -57,38 +52,41 @@ else
   ids = ARGV
 end
 
-seqs = []
+ActiveRecord::Base.establish_connection(:adapter  => 'mysql',
+:host => 'mysql-lan-pro', :username=>'jbadger', :password=>'plankton',
+:database=>'phylodb')
 
-if (opt.name)
-  seqs = Protein.all(:name => ids) if (!opt.dna)
-  seqs = Transcript.all(:name => ids) if (opt.dna)
-elsif (opt.species || opt.taxonomy || opt.contig || opt.form)
-  ids.each do |id|
-    if (opt.species)
-      contigs = Contig.all(:species.like => "%#{id}%")
-    elsif (opt.taxonomy)
-      contigs = Contig.all(:taxonomy.like => "%#{id}%")
-    elsif (opt.form)
-      contigs = Contig.all(:form.like => "%#{id}%")
-    elsif (opt.contig)
-      contigs = Contig.all(:name => id)
-   end
-   contigs.each do |contig|
-     if (opt.dna)
-       seqs.push(contig.transcripts)
-     elsif(opt.molecule)
-       seqs.push(contig)
-     elsif(opt.rna)
-       seqs.push(contig.rrnas)
-     else
-       seqs.push(contig.proteins)
-     end
-   end
+contig_names = []
+
+ids.each do |id|
+  if (opt.species)
+    contig_names += Contig.find(:all, :select=>"name", :conditions=>"species LIKE '#{id}%'")
+  elsif (opt.taxonomy)
+    contig_names += Contig.find(:all, :select=>"name", :conditions=>"taxonomy LIKE '%#{id}%'")
+  elsif (opt.form)
+    contig_names += Contig.find(:all, :select=>"name", :conditions=>"form LIKE '%#{id}%'")
   end
 end
 
-seqs.flatten!
-seqs.each do |seq|
-  print seq.to_fasta
+if (opt.dna)
+  Transcript.includes(:contig, :protein).find_each(:conditions=>{:contig_name => contig_names}) do |cdna|
+    print cdna.to_fasta
+  end
+elsif (opt.rna)
+  Rrna.includes(:contig).find_each(:conditions=>{:contig_name => contig_names}) do |rrna|
+    print rrna.to_fasta
+  end
+elsif (opt.molecule)
+  Contig.find_each(:conditions => {:name => contig_names}) do |contig|
+    print contig.to_fasta
+  end
+elsif (opt.name)
+  Protein.includes(:contig).find_each(:conditions =>{:name=>ids}) do |prot|
+    print prot.to_fasta
+  end
+else
+  Protein.includes(:contig).find_each(:conditions=>{:contig_name => contig_names}) do |prot|
+    print prot.to_fasta
+  end
 end
 

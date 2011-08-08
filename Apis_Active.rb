@@ -3,8 +3,8 @@
 require 'active_record'
 require 'composite_primary_keys'
 
-ActiveRecord::Base.establish_connection(:adapter  => 'sqlite3',
-:database => '/Users/jbadger/test_apis.db')
+# Example: ActiveRecord::Base.establish_connection(:adapter  => 'sqlite3',
+#:database => '/Users/jbadger/test_apis.db')
 
 class Dataset < ActiveRecord::Base
   set_table_name "dataset"
