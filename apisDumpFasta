@@ -19,10 +19,12 @@ opt.split = false
 opt.tax = nil
 opt.ann = false
 opt.taxonomy = nil
+opt.exp = nil
 
 ARGV.options {|o|
   o.banner << " [dataset...dataset]"
   o.on("-a", "--all", "dump all datasets") {opt.all = true}
+  o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
   o.on("-f ", "--file ", String, 
         "read list of ids to search from file") {|f| opt.file = f}   
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
@@ -39,7 +41,7 @@ ARGV.options {|o|
     STDERR << o 
     exit(1)
   end
-  if (ARGV.size < 1 && !opt.all)
+  if (ARGV.size < 1 && (!opt.all && !opt.exp))
     STDERR << o
     exit(1)
   end
@@ -49,11 +51,12 @@ ActiveRecord::Base.establish_connection(:adapter  => 'mysql',
 :host => opt.host, :username=>opt.user, :password=>opt.password,
 :database=>opt.storage)
 
-if (opt.all)
-  Apisrun.find_each(:select => "name") do |run|
-    ARGV.push(run.name)
+if (opt.all || opt.exp)
+  Apisrun.find_each(:select => "dataset") do |run|
+    ARGV.push(run.dataset) if (!opt.exp || run.dataset =~/#{opt.exp}/)
   end
 end
+
 
 picked = Hash.new
 
@@ -66,10 +69,11 @@ if (opt.file)
 end
 
 file = STDOUT
-STDERR << "Writing Peptides...\n"
+
 oldDataset = ""
 file = STDOUT
 Apisrun.find_each(:conditions => {:dataset=>ARGV}) do |run|
+  STDERR << "Writing peptides for #{run.dataset}...\n"
   if (opt.split && run.dataset != oldDataset)
     file.close if file != STDOUT
     file = File.new(run.dataset + ".pep", "w")
