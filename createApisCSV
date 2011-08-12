@@ -145,6 +145,8 @@ if (!datasets.empty?)
   STDERR << "Writing Spreadsheet...\n"
 
   datasets.each do |dataset|
+    DataMapper.setup(:default, opt.host + "/" + opt.storage)
+    DataMapper.setup(:combodb, opt.host + "/" + opt.proteindb)
     if (opt.cut)
       file.close if file != STDOUT
       file = File.new(dataset + ext, "w")
