@@ -78,7 +78,12 @@ Apisrun.find_each(:conditions => {:dataset=>ARGV}) do |run|
     file.close if file != STDOUT
     file = File.new(run.dataset + ".pep", "w")
   end
-  run.sequences.includes(:classification).each do |seq|
+  if (opt.taxonomy)
+    includeIt = :classification
+  else
+    includeIt = nil
+  end
+  run.sequences.includes(includeIt).each do |seq|
     printIt = true
     taxonomy = ""
     printIt = false if (opt.file && (!picked[seq.seq_name]))

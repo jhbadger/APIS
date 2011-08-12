@@ -17,7 +17,6 @@ end
 
 class Sequence < ActiveRecord::Base
   set_table_name "sequence"
-  set_primary_keys :dataset, :seq_name
   has_many :blasts, :foreign_key => [:dataset, :seq_name]
   has_many :alignments, :foreign_key => [:dataset, :seq_name]
   has_many :annotations, :foreign_key => [:dataset, :seq_name]
@@ -38,6 +37,14 @@ class Sequence < ActiveRecord::Base
       return classification.taxonomy
     end
   end
+  
+  def gos_taxonomy
+    if (classification.nil?)
+      return ""
+    else
+      return classification.gos_taxonomy
+    end
+  end
 end
 
 class Blast < ActiveRecord::Base
@@ -49,7 +56,6 @@ end
 
 class Tree < ActiveRecord::Base
   set_table_name "tree"
-  set_primary_keys :dataset, :seq_name
   has_one :classification, :foreign_key => [:dataset, :seq_name]
   has_many :annotations, :foreign_key => [:dataset, :seq_name]
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
@@ -58,7 +64,6 @@ end
 
 class Annotation < ActiveRecord::Base
   set_table_name "annotation"
-  set_primary_keys :dataset, :seq_name, :source
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
   belongs_to :tree, :foreign_key => [:dataset, :seq_name]
   belongs_to :apisrun, :foreign_key => "dataset"
@@ -66,8 +71,6 @@ end
 
 class Classification < ActiveRecord::Base 
   set_table_name "classification"
-  set_primary_keys :dataset, :seq_name
-  alias_attribute :classname, :class
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
   belongs_to :tree, :foreign_key => [:dataset, :seq_name]
   belongs_to :apisrun, :foreign_key => "dataset"
@@ -77,7 +80,55 @@ class Classification < ActiveRecord::Base
       super
     end
   end
+  # return NCBI-style semicolon delimited taxonomy string
   def taxonomy
-    return [kingdom, phylum, classname, ord, family, genus, species].join("; ")
+    return [kingdom, phylum, self[:class], ord, family, genus, species].join("; ")
+  end
+  # return taxonomic grouping used in the GOS analysis
+  def gos_taxonomy
+    if genus =~/Pelagibacter|SAR11/
+      taxon = "SAR11"
+    elsif ord =~/Rhodobacterales/
+      taxon = "Rhodobacterales"
+    elsif self[:class] === "Alphaproteobacteria"
+      taxon = "Other Alphaproteobacteria"
+    elsif genus =~/Prochlorococcus/ || family =~/Prochlorococcus/
+      taxon = "Prochlorococcus"
+    elsif self[:class] == "Gammaproteobacteria"
+      taxon = "Gammaproteobacteria"
+    elsif phylum =~/Bacteroidetes|Chlorobi/
+      taxon = "Bacteroidetes/Chlorobi"
+    elsif phylum == "Firmicutes"
+        taxon = "Firmicutes"
+    elsif phylum == "Actinobacteria"
+      taxon = "Actinobacteria"
+    elsif phylum == "Actinobacteria"
+      taxon = "Actinobacteria"
+    elsif self[:class] == "Betaproteobacteria"
+      taxon = "Betaproteobacteria"
+    elsif self[:class] == "Deltaproteobacteria" || ord == "Deltaproteobacteria"
+      taxon = "Deltaproteobacteria"
+    elsif self[:class] == "Epsilonproteobacteria"
+      taxon = "Epsilonproteobacteria"
+    elsif phylum == "Proteobacteria"
+      taxon = "Other Proteobacteria"
+    elsif phylum == "Spirochaetes"
+      taxon = "Spirochaetes"
+    elsif phylum == "Thermotogae"
+      taxon = "Thermotogae"
+    elsif phylum == "Planctomycetes"
+      taxon = "Planctomycetes"
+    elsif phylum =~/Chlamydiae|Verrucomicrobia/
+      taxon = "Chlamydiae/Verrucomicrobia"
+    elsif genus =~/Synechococcus/ || ord =~/Synechococcus/
+      taxon = "Synechococcus"
+    elsif phylum == "Cyanobacteria"
+      taxon = "Other Cyanobacteria"
+    elsif phylum == "Mixed"
+      taxon = "Mixed"
+    else
+      taxon = "Other"
+    end
+    return taxon
   end
 end
