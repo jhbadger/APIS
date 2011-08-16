@@ -20,7 +20,9 @@ class SunGrid
   # write job script
   def writeJob
     out = File.new(@name + ".com", "w")
-    out.printf("\#!/bin/bash\n")
+    out.printf("\#!/bin/sh\n")
+    out.printf("\#$ -t 1-%d\n", @count)
+    out.printf("cd %s\n",Dir.pwd)
     if (@command[1])
       out.printf("%s %s_input.$SGE_TASK_ID | %s\n", @command.first, 
       @name, @command[1])
@@ -39,7 +41,9 @@ class SunGrid
     qsub += " -P #{@project}" if @project
     qsub +=  " -l memory=#{@memory}" if (@memory)
     qsub += " -l queue=#{@queue}" if (@queue)
-    qsub += " ./#{@name}.com"
+    qsub += " -o #{Dir.pwd} "
+    qsub += " -e #{Dir.pwd} "
+    qsub += " #{Dir.pwd}/#{@name}.com"
     system(qsub)
   end
 
