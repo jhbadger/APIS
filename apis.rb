@@ -301,7 +301,7 @@ def runGridApis(storage, dataset, opt)
     if (count % opt.gridSize == 0)
       out.close if (!out.nil?)
       pepName = grid.next
-      out = File.new(pepName + ".pep", "w")
+      out = File.new(pepName, "w")
     end 
     out.print seq
     count += 1
