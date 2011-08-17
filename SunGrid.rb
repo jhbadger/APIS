@@ -41,7 +41,7 @@ class SunGrid
     qsub += " -sync yes" if (sync)
     qsub += " -P #{@project}" if @project
     qsub +=  " -l memory=#{@memory}" if (@memory)
-    qsub += " -l queue=#{@queue}" if (@queue && @queue != "default")
+    #qsub += " -l queue=#{@queue}" if (@queue && @queue != "default")
     qsub += " -o #{Dir.pwd} "
     qsub += " -e #{Dir.pwd} "
     qsub += " #{Dir.pwd}/#{@name}.com"
