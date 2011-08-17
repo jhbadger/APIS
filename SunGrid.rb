@@ -1,6 +1,6 @@
 # class to encapsulate running jobs on a Sun Grid Engine
 class SunGrid
-  attr :name
+  attr_accessor :name
   
   def initialize(command, project = nil, memory = nil, queue = nil)
     @command = [command].flatten
