@@ -1,6 +1,7 @@
 # class to encapsulate running jobs on a Sun Grid Engine
 class SunGrid
-  attr :subdir
+  attr :name
+  
   def initialize(command, project = nil, memory = nil, queue = nil)
     @command = [command].flatten
     @name = @command.first.gsub("/","_").split(" ").first
@@ -40,7 +41,7 @@ class SunGrid
     qsub += " -sync yes" if (sync)
     qsub += " -P #{@project}" if @project
     qsub +=  " -l memory=#{@memory}" if (@memory)
-    qsub += " -l queue=#{@queue}" if (@queue)
+    qsub += " -l queue=#{@queue}" if (@queue && @queue != "default")
     qsub += " -o #{Dir.pwd} "
     qsub += " -e #{Dir.pwd} "
     qsub += " #{Dir.pwd}/#{@name}.com"

@@ -2,6 +2,7 @@ require 'Newick'
 require 'Phylogeny'
 require 'DBwrapper'
 require 'ZFile'
+require 'SunGrid'
 
 $VERBOSE = false
 
@@ -278,24 +279,6 @@ def runGridApis(storage, dataset, opt)
     STDERR.printf("A JCVI project number is needed for grid jobs\n")
     exit(1)
   end
-  STDERR.printf("Splitting pep file for grid...\n")
-  count = 0
-  pepName = dataset + ".PEP000001"
-  peps = []
-  out = nil
-  count = 0
-  storage.query("select seq_name, sequence from sequence where dataset = '#{dataset}' and processed = 0").each {|row|
-    seq = ">#{row[0]}\n#{row[1].gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    if (count % opt.gridSize == 0)
-      out.close if (!out.nil?)
-      out = File.new(pepName + ".pep", "w")
-      peps.push(pepName.dup)
-      pepName.succ!
-    end 
-    out.print seq
-    count += 1
-  }
-  out.close if (!out.nil?)
   cmd = "apisRun "
   cmd += "-a " if opt.annotate
   cmd += "-t #{opt.maxTree} "
@@ -308,15 +291,22 @@ def runGridApis(storage, dataset, opt)
   cmd += "-r " if (opt.ruleMaj)
   cmd += "-y '#{opt.exclude}' " if (opt.exclude)
   cmd += "--erase -l -m #{opt.maxHits} -e #{opt.evalue} -f #{opt.coverage} "
-  if (opt.queue != "default")
-    queue = "-l \"#{opt.queue},memory=4G\""
-  else
-    queue = "-l \"memory=4G\""
+  grid = SunGrid.new(cmd, opt.project, "4G", opt.queue)
+  grid.name = "apisRun_" + dataset
+  STDERR.printf("Splitting pep file for grid...\n")
+  out = nil
+  count = 0
+  storage.query("select seq_name, sequence from sequence where dataset = '#{dataset}' and processed = 0").each do |row|
+    seq = ">#{row[0]}\n#{row[1].gsub(Regexp.new(".{1,60}"), "\\0\n")}"
+    if (count % opt.gridSize == 0)
+      out.close if (!out.nil?)
+      pepName = grid.next
+      out = File.new(pepName + ".pep", "w")
+    end 
+    out.print seq
+    count += 1
   end
-  qsub = "qsub -P #{opt.project} #{queue} -e apis.err -cwd -o apis.out "
-  peps.each {|pep|
-    STDERR.printf("Submitting #{pep} to the grid...\n")
-    STDERR.flush
-    system("#{qsub} \"#{cmd} #{pep}.pep\"")
-  }
+  out.close if (!out.nil?)
+  grid.submit(sync=true)
+  grid.cleanup
 end

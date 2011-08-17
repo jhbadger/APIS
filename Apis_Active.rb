@@ -1,9 +1,6 @@
 require 'active_record'
 require 'composite_primary_keys'
 
-# Example: ActiveRecord::Base.establish_connection(:adapter  => 'sqlite3',
-#:database => '/Users/jbadger/test_apis.db')
-
 class Apisrun < ActiveRecord::Base
   set_table_name "dataset"
   set_primary_key "dataset"
@@ -17,6 +14,7 @@ end
 
 class Sequence < ActiveRecord::Base
   set_table_name "sequence"
+  set_primary_keys ["dataset", "seq_name"]
   has_many :blasts, :foreign_key => [:dataset, :seq_name]
   has_many :alignments, :foreign_key => [:dataset, :seq_name]
   has_many :annotations, :foreign_key => [:dataset, :seq_name]
@@ -49,13 +47,14 @@ end
 
 class Blast < ActiveRecord::Base
   set_table_name "blast"
-  set_primary_keys :dataset, :seq_name,:subject_name,:query_start,:subject_start
+  set_primary_keys [:dataset, :seq_name]
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
   belongs_to :apisrun, :foreign_key => "dataset"
 end
 
 class Tree < ActiveRecord::Base
   set_table_name "tree"
+  set_primary_keys [:dataset, :seq_name]
   has_one :classification, :foreign_key => [:dataset, :seq_name]
   has_many :annotations, :foreign_key => [:dataset, :seq_name]
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
@@ -64,6 +63,7 @@ end
 
 class Annotation < ActiveRecord::Base
   set_table_name "annotation"
+  set_primary_keys [:dataset, :seq_name]
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
   belongs_to :tree, :foreign_key => [:dataset, :seq_name]
   belongs_to :apisrun, :foreign_key => "dataset"
@@ -71,6 +71,7 @@ end
 
 class Classification < ActiveRecord::Base 
   set_table_name "classification"
+  set_primary_keys [:dataset, :seq_name]
   belongs_to :sequence, :foreign_key => [:dataset, :seq_name]
   belongs_to :tree, :foreign_key => [:dataset, :seq_name]
   belongs_to :apisrun, :foreign_key => "dataset"
@@ -130,5 +131,19 @@ class Classification < ActiveRecord::Base
       taxon = "Other"
     end
     return taxon
+  end
+end
+
+# connect using a url-style driver://user:password@server/database
+def connectDB(url)
+  token = "[a-z|0-9|A-Z|_|-]+"
+  if (url =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})/)
+    driver, user, password, server, database = $1, $2, $3, $4, $5
+    ActiveRecord::Base.establish_connection(:adapter  => driver,
+    :host => server, :username=> user, :password=> password,
+    :database=> database)
+  else
+    STDERR << "can't parse " << url << "\n"
+    exit(1)
   end
 end
