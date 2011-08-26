@@ -2,25 +2,17 @@
 
 require 'optparse'
 require 'ostruct'
-require 'apis'
+require 'PhyloDB'
 
 opt = OpenStruct.new
+opt.database = "mysql://access:access@mysql-lan-pro/phylodb"
 opt.everything = false
-opt.species = false
-opt.contig = false
-opt.database = "combodb"
-opt.host = "mysql-lan-pro.jcvi.org"
 
-ARGV.options {|o|
-  o.banner << " [id...id...]"
+ARGV.options do |o|
+  o.banner << " [contig-id...id...]"
   o.on("-d ", "--database ", String, 
          "query database (default #{opt.database})") {|d| opt.database = d}
-  o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
-  o.on("-e", "--everything", "write entire ComboDB") {|e| opt.everything = e}
-  o.on("-c", "--contig", 
-	  "use contig as optional id") {opt.contig = true}
-  o.on("-s", "--species", 
-	  "use species as optional id") {opt.species = true}  
+  o.on("-e", "--everything", "write entire ComboDB") {opt.everything = true}  
   begin
     o.parse!
   rescue
@@ -32,152 +24,19 @@ ARGV.options {|o|
     STDERR.puts o
     exit(1)
   end
-}
+end
 
-db = MyDB.new(opt.host, opt.database, "apis", "apis_user")
+connectDB(opt.database)
 
-if (opt.database == "viraldb")
-  dbname = "viral"
-  dbprefix = "viral_"
-elsif(opt.database == "dinodb")
-  dbname = "dino"
-  dbprefix = "dino_"
-elsif(opt.database == "phylodb")
-  dbname = "phylo"
-  dbprefix = "phylo_"
+if (opt.everything)
+  contig_names = Contig.find(:all, :select=>"name")
 else
-  dbname = "combo"
-  dbprefix = ""
+  contig_names = ARGV
 end
 
-def processContig(db, att, contig, pep, cds=nil, order=nil, rna=nil, mol=nil)
-  name, species, strain, taxon_id, taxonomy, supergroup, form, con = contig
-  if (con.nil?)
-    con == ""
-    size = ""
-    gc = ""
-  else
-    size = con.length
-    gct = con.count("GCgc")
-    at =  con.count("ATUatu")
-    gc = (gct*100.0) / (gct + at)
-    header = "#{name} [#{form}] {#{species}}" 
-    if (size > 5 && !mol.nil?)
-      mol.print ">#{header}\n#{con.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    end
-  end
-  proteins = nil
-  rrnas = nil
-  db.query("select count(*) from proteins where contig_name = '#{name}'").each {|row|
-    proteins, rest = row
-  }
-  if (!rna.nil?)
-    db.query("select count(*) from rrnas where contig_name = '#{name}'").each {|row|
-      rrnas, rest = row
-    }
-  end
-  [name, size, species, strain, taxon_id, taxonomy, form, proteins, rrnas, "0", gc].each {|field|
-    att.printf("%s\t", field)
-  }
-  att.printf("\n")
-  anns = Hash.new
-  db.query("select name, annotation, seq from proteins where contig_name = '#{name}' order by name").each {|row|
-    pname, annotation, seq = row
-    annotation.strip!
-    if (pname =~/^[0-9]/)
-      # fix lack of gi
-      db.query("update proteins set name = 'gi#{pname}' where name = '#{pname}'")
-      pname = "gi" + pname
-    end
-    header = "#{pname} #{annotation} {#{species}}" 
-    pep.print ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    anns[pname] = annotation
-  }
-  if (!cds.nil?)
-    db.query("select name, seq from transcripts where contig_name = '#{name}' order by name").each {|row|
-      tname, seq = row
-      if (tname =~/^[0-9]/)
-        # fix lack of gi
-        db.query("update transcripts set name = 'gi#{tname}' where name = '#{tname}'")
-        tname = "gi" + tname
-      end
-      header = "#{tname} #{anns[tname]} {#{species}}" 
-      cds.print ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    }
-  end
-  if (!order.nil?)
-    db.query("select protein_name, start, stop, strand from geneorders where contig_name = '#{name}' order by start").each {|row|
-      pname, start, stop, strand = row
-      order.printf("%s\t%8d\t%8d\t%3d\t%s\n", pname, start, stop, strand, anns[pname])
-    }
-  end
-  if (!rna.nil?) 
-    db.query("select name, annotation, seq from rrnas where contig_name = '#{name}'").each {|row|
-      rname, annotation, seq = row
-      header = "#{rname} #{annotation} {#{species}}" 
-      rna.print ">#{header}\n#{seq.gsub(Regexp.new(".{1,60}"), "\\0\n")}"
-    }
-  end
+pep = File.new(opt.database.split("/").last + ".pep", "w")
+Protein.includes(:contig).find_each(:conditions =>{:contig_name=>contig_names}) do |prot|
+  pep.print prot.to_fasta
 end
+pep.close
 
-if (File.exist?("#{dbname}.pep"))
-  STDERR.printf("Looks like there's already a #{dbname}db in this directory.\n")
-  STDERR.printf("Use a different directory or delete copy here first.\n")
-  exit(1)
-else  
-  pep = File.new("#{dbname}.pep", "w")
-  cds = File.new("#{dbname}.cds", "w") if (dbname != "dino" && dbname != "phylo")
-  att = File.new("#{dbprefix}contig.att", "w")
-  order = File.new("#{dbprefix}gene.att", "w") if (dbname != "dino" && dbname != "phylo")
-  rna = File.new("#{dbname}.rRNA", "w") if (dbname != "viral" && dbname != "dino" && dbname != "phylo")
-  mol = File.new("#{dbname}.con", "w") if (dbname != "dino" && dbname != "phylo")
-  ARGV.each {|id|
-    if (opt.species)
-      contigs = Contig.all(:species.like => "%#{id}%")
-      if (contigs.empty?)
-        STDERR.printf("Species %s not found in database\n", id)
-      else
-        contigs.each {|contig|
-          processContig(db, att, contig, pep, cds, order, rna, mol)
-        }
-      end
-    elsif (opt.contig)
-      contig = Contig.first(:name=>id)
-      if (contig.nil?)
-        STDERR.printf("Contig %s not found in database\n", id)
-      else
-        processContig(db, att, contig, pep, cds, order, rna, mol)
-      end
-    end
-  }
-  
-  if (opt.everything)
-    organism = File.new("#{dbprefix}organism.att", "w")
-    db.query("select distinct species, taxonomy, taxon_id from contigs where form like 'Chromosome%' order by species").each {|row|
-      species, taxonomy, taxon_id = row
-      organism.print species + "\t" + taxonomy + "\t" + taxon_id.to_s + "\n"
-    }
-    organism.close
-    pep = File.new("#{dbname}.pep", "w")
-    cds = File.new("#{dbname}.cds", "w") if (dbname != "dino" && dbname != "phylo")
-    att = File.new("#{dbprefix}contig.att", "w")
-    order = File.new("#{dbprefix}gene.att", "w" ) if (dbname != "dino" && dbname != "phylo")
-    rna = File.new("#{dbname}.rRNA", "w") if (dbname != "dino" && dbname != "viral" && dbname != "phylo")
-    con = File.new("#{dbname}.con", "w") if (dbname != "dino" && dbname != "phylo")
-    oldSpecies = ""
-    db.query("select * from contigs order by species").each {|contig|
-      STDERR.printf("Writing %s...\n", contig[1]) if (oldSpecies != contig[1])
-      processContig(db, att, contig, pep, cds, order, rna, con)
-      oldSpecies = contig[1]
-    }
-    pep.close
-    cds.close if !cds.nil?
-    att.close
-    order.close if !order.nil?
-    rna.close if !rna.nil?
-    STDERR.printf("Formatting blast databases...\n")
-    system("formatdb -pF -i #{dbname}.cds") if (!cds.nil?)
-    system("formatdb -pF -i #{dbname}.rRNA") if (!rna.nil?)
-    system("formatdb -pT -i #{dbname}.pep")
-  end
-end

@@ -1,4 +1,5 @@
 require 'active_record'
+require 'bio'
 
 class Contig < ActiveRecord::Base
   set_primary_key "name"
@@ -62,5 +63,18 @@ class Rrna < ActiveRecord::Base
   def species
     return contig.species
   end
-  
+end
+
+# connect using a url-style driver://user:password@server/database
+def connectDB(url)
+  token = "[a-z|0-9|A-Z|_|-]+"
+  if (url =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})/)
+    driver, user, password, server, database = $1, $2, $3, $4, $5
+    ActiveRecord::Base.establish_connection(:adapter  => driver,
+    :host => server, :username=> user, :password=> password,
+    :database=> database)
+  else
+    STDERR << "can't parse " << url << "\n"
+    exit(1)
+  end
 end
