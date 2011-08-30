@@ -43,14 +43,16 @@ class DBwrapper
         dbs[File.basename(source, ".db")] = SQLite.new(db)
       elsif (source =~/::/)
         host, dbname = source.split("::")
-        dbs[dbname] = MyDB.new(host, dbname, user, password)
-        dbs[dbname].close
+        if (!dbs[dbname])
+          dbs[dbname] = MyDB.new(host, dbname, user, password)
+          dbs[dbname].close
+        end
       else
         host = source
         db = MyDB.new(host, "", user, password)
         db.query("SHOW DATABASES").each {|row|
           dbname = row[0]
-          if (dbname =~/_apis/)
+          if (dbname =~/_apis/ && !dbs[dbname])
             dbs[dbname] = MyDB.new(host, dbname, user, password)
             dbs[dbname].close
           end
