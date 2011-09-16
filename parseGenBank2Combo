@@ -83,6 +83,9 @@ ARGV.each do |gb|
     end
     acc = genome.accession || ""
     acc = genome.locus.entry_id || "" if acc == ""
+    if (genome.definition =~/Contig (scaffold[0-9]*)/)
+      acc = $1
+    end
     if (acc.index("scaffold:")) # EnsEmbl format
       acc = acc.gsub("scaffold:","").split(":")[0..1].join("_")
     end
