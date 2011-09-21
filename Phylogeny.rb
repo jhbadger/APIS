@@ -26,31 +26,34 @@ def gblocks(trimFile, alignFile)
   return len
 end
 
-def trimAlignment(trimFile, alignFile, maxGapFract = 0.5)
+def trimAlignment(trimFile, alignFile, maxGapFract = 0.5, exclude = nil)
   if (File.exist?(alignFile) && !File.exist?(trimFile))
     seqs = []
     badCols = []
     len = nil
-    Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
+    Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
       seq.data.tr!("\n","")
       seqs.push(seq)
-    }
-    seqs[0].data.length.times {|i|
+    end
+    seqs[0].data.length.times do |i|
       gapNum = 0
-      seqs.each {|seq|
-	gapNum += 1 if (seq.data[i].chr == "-" || seq.data[i].chr == "?" || seq.data[i].chr == ".")
-      }
-      badCols.push(i) if (gapNum > maxGapFract*seqs.size)
-    }
+      count = 0
+      seqs.each do |seq|
+        next if (exclude && seq.entry_id =~/#{exclude}/)
+	      gapNum += 1 if (seq.data[i].chr == "-" || seq.data[i].chr == "?" || seq.data[i].chr == ".")
+	      count += 1
+      end
+      badCols.push(i) if (gapNum > maxGapFract*count)
+    end
     out = File.new(trimFile, "w")
-    seqs.each {|seq|
-      badCols.each {|col|
-	seq.data[col] = "!"
-      }
+    seqs.each do |seq|
+      badCols.each do |col|
+	      seq.data[col] = "!"
+      end
       seq.data.tr!("!","")
       len = seq.data.length if len.nil?
       out.print Bio::Sequence.auto(seq.data).to_fasta(seq.definition, 60)
-    }
+    end
     out.close
     return len
   end

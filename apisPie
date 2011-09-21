@@ -2,13 +2,13 @@
 
 require 'optparse'
 require 'ostruct'
-require 'dm-core'
-require 'ApisDB'
+require 'Apis_Active'
 require 'gchart'
 require 'csv'
 
 opt = OpenStruct.new
 opt.all = false
+opt.exp = false
 opt.level = 2
 opt.storage = "misc_apis" 
 opt.host = "mysql://access:access@mysql-lan-pro"
@@ -18,6 +18,7 @@ opt.prop = false
 ARGV.options do |opts|
   opts.banner << " [dataset .. dataset..]"
   opts.on("-a", "--all", "make graphs for all datasets in database") {|t| opt.all = t}
+  opts.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
   opts.on("-l ", "--level ", Integer,
           "taxonomic level (default #{opt.level})") {|t| opt.level = t}
   opts.on("-p ", "--property ", String, "metadata property to group by") {|t| opt.prop = t}
@@ -31,23 +32,23 @@ ARGV.options do |opts|
     STDERR.puts opts
     exit(1)
   end
-  if (ARGV.size < 1 && !opt.all && !opt.prop)
+  if (ARGV.size < 1 && !opt.all && !opt.prop && !opt.exp)
     STDERR.puts opts
     exit(1)
   end
 end
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
+connectDB(opt.host + "/" + opt.storage)
 
 fieldNames =  ["kingdom","phylum","class","ord","family","genus","species"]
 rank = fieldNames[opt.level]
 out = File.new("chart_#{rank}.html", "w")
 
-if (opt.all)
+if (opt.all || opt.exp)
   sets = []
-  query = "SELECT distinct dataset FROM classification"
-  repository(:default).adapter.select(query).each do |dataset|
-    sets.push(dataset)
+  Sequence.connection.execute("select dataset from dataset").each do |row|
+    dataset, rest = row
+    sets.push(dataset) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
 else
   sets = ARGV
@@ -57,10 +58,11 @@ metadata = Hash.new
 if (opt.prop)
   sets = []
   query = "SELECT dataset, value FROM metadata WHERE prop = '#{opt.prop}'"
-  repository(:default).adapter.select(query).each do |row|
-    metadata[row.value] = "IN (" if metadata[row.value].nil?
-    sets.push(row.value) if (!sets.include?(row.value))
-    metadata[row.value] += "'#{row.dataset}',"
+  Sequence.connection.execute(query).each do |row|
+    dataset, value = row
+    metadata[value] = "IN (" if metadata[value].nil?
+    sets.push(value) if (!sets.include?(value))
+    metadata[value] += "'#{dataset}',"
   end
   metadata.keys.each do |value|
     metadata[value].chop!
@@ -75,16 +77,16 @@ sets.each do |dataset|
   STDERR.printf("Processing %s...\n", dataset)
   counts = Hash.new
   total = 0
-  # GROUP BY not supported by DataMapper, so raw SQL
   if (opt.prop)
-    query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset #{metadata[dataset]} GROUP BY #{rank}"
+    query = "SELECT COUNT(*) num, #{rank} FROM classification WHERE dataset #{metadata[dataset]} GROUP BY #{rank}"
   else
-    query = "SELECT COUNT(*) num, #{rank} taxon FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
+    query = "SELECT COUNT(*) num, #{rank} FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
   end
-  repository(:default).adapter.select(query).each do |row|
-    next if row.taxon == "Undefined"
-    counts[row.taxon] = row["num"]
-    total += row.num.to_f / 100
+  Sequence.connection.execute(query).each do |row|
+    num, taxon = row
+    next if taxon == "Undefined"
+    counts[taxon] = num.to_i
+    total += num.to_i / 100.0
   end
   percents[dataset] = Hash.new
   counts["Misc"] = 0
@@ -140,8 +142,8 @@ out.printf("<center><H1>#{rank.capitalize} level breakdown</H1></center><BR>\n")
 percents.keys.sort.each do |dataset|
   STDERR.printf("Drawing chart for %s...\n", dataset)
   print ([dataset] + taxa.keys.sort.collect{|x| percents[dataset][x].to_f}).to_csv
-  data = percents[dataset].values
   legend = percents[dataset].keys
+  data = legend.collect{|x| percents[dataset][x].round(1)}
   glegend = legend.dup
   if (opt.num)
     legend.size.times do |i|

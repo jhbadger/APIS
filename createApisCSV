@@ -6,12 +6,10 @@
 # "relaxed" classification can be included
 
 require 'optparse'
-require 'dm-core'
 require 'Newick'
 require 'ostruct'
 require 'csv'
-require 'ComboDB'
-require 'ApisDB'
+require 'Apis_Active'
 
 opt = OpenStruct.new
 
@@ -59,11 +57,11 @@ ARGV.options {|o|
   end
 }
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
-DataMapper.setup(:combodb, opt.host + "/" + opt.proteindb)
+connectDB(opt.host + "/" + opt.storage)
 
 if (opt.all || opt.exp)
-  repository(:default).adapter.select("select dataset from dataset").each do |dataset|
+  Sequence.connection.execute("select dataset from dataset").each do |row|
+    dataset, rest = row
     ARGV.push(dataset) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
 end
@@ -93,7 +91,12 @@ if (!datasets.empty?)
 
   if (opt.tree || opt.relax)
     STDERR << "Loading Taxonomy...\n"
-    taxdb = repository(:combodb){Contig.tax}
+    taxdb = Hash.new
+    Sequence.connection.execute("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
+      name, species, taxonomy = row
+      taxdb[species] = taxonomy.split("; ")
+      taxdb[name] = taxdb[species]
+    end
   else
     taxdb = nil
   end
@@ -112,7 +115,9 @@ if (!datasets.empty?)
     end
     t = "NO_TREE" if t == ""
     if (goodRank != "")
-      tid = repository(:combodb).adapter.select("select taxon_id from phylodb.taxonomy where name = '#{goodRank}' limit 1").first
+      Sequence.connection.execute("select taxon_id from phylodb.taxonomy where name = '#{goodRank}' limit 1").each do |row|
+        tid = row.first
+      end
     end
     return t, tid
   end
@@ -134,7 +139,10 @@ if (!datasets.empty?)
   query = "SELECT count(*) FROM sequence WHERE dataset in ('#{datasets.join('\',\'')}')"
   query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
   STDERR << "Counting sequences...\n"
-  num = repository(:default).adapter.select(query).first
+  num = nil
+  Sequence.connection.execute(query).each do |row|
+    num = row.first.to_i
+  end
   milestone = num / 200.0
 
   file = STDOUT
@@ -145,8 +153,7 @@ if (!datasets.empty?)
   STDERR << "Writing Spreadsheet...\n"
 
   datasets.each do |dataset|
-    DataMapper.setup(:default, opt.host + "/" + opt.storage)
-    DataMapper.setup(:combodb, opt.host + "/" + opt.proteindb)
+    connectDB(opt.host + "/" + opt.storage)
     if (opt.cut)
       file.close if file != STDOUT
       file = File.new(dataset + ext, "w")
@@ -167,15 +174,14 @@ if (!datasets.empty?)
     query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
     query += " LIMIT #{opt.limit}" if (opt.limit)
   
-    repository(:default).adapter.select(query).each do |row|
-      list = row.to_a
-      tree = list.pop
+    Sequence.connection.execute(query).each do |row|
+      tree = row.pop
       begin
         newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
       rescue
         newick = nil
       end
-      tax, tid = summarizeClass(list[4..10])
+      tax, tid = summarizeClass(row[4..10])
       if (opt.relax)
         if (tree.nil? || newick.nil?)
           rtax = ""
@@ -184,31 +190,32 @@ if (!datasets.empty?)
           relax = newick.createClassification(list[0], taxdb, nil, true)
           rtax, rtid = summarizeClass(relax)
         end
-        list[4..10] = [tax, tid, rtax, rtid]
+        row[4..10] = [tax, tid, rtax, rtid]
       else
-        list[4..10] = [tax, tid]
+        row[4..10] = [tax, tid]
       end
       if (opt.boot)
         if (tree.nil? || newick.nil?)
-          list.push(nil)
+          row.push(nil)
         else
-          list.push(newick.findNode(row[0]).parent.name)
+          row.push(newick.findNode(row[0]).parent.name)
         end
       end
-      list.push(tree) if (opt.tree)
+      row.push(tree) if (opt.tree)
       if (opt.blast)
         query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset}' AND "
         query += "seq_name = '#{row[0]}' ORDER BY evalue ASC LIMIT 1"
-        blastHit = repository(:default).adapter.select(query).first
+        subject_name, subject_description, evalue = nil, nil, nil
+        Sequence.connection.execute(query).each do |row|
+          subject_name, subject_description, evalue = row
+        end
         if (!blastHit.nil?)
           list.push(blastHit["subject_name"],blastHit["subject_description"], blastHit["evalue"])
         end
       end
-      file << list.to_csv({:col_sep=>opt.delim})
+      file << row.to_csv({:col_sep=>opt.delim})
       count += 1
       STDERR << ((count*1000)/num)/10.0 << "% completed...\n" if (count % milestone == 0)
-      row = nil
-      list = nil
     end
   end
   file.close if file != STDOUT
