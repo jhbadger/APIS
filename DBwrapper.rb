@@ -560,7 +560,7 @@ class DBwrapper
         acc, contig = relative.split("-")
 	contig, rest = contig.split("__")
 	next if (tax[contig].nil? || tax[contig]["species"].nil?)
-	groups = tax[contig]["taxonomy"].split("; ")
+	groups = tax[contig]["taxonomy"].split(/; |;/)
         groups.size.times {|i|
           counts[i] = Hash.new if counts[i].nil?
           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
@@ -691,7 +691,7 @@ class SQLite < DBwrapper
       list.each {|relative|
         query =  "SELECT taxonomy FROM apis_proteins "
         query += "WHERE protein_id=#{relative}"
-        groups = @connection.get_first_value(query).split("; ") 
+        groups = @connection.get_first_value(query).split(/; |;/) 
         groups.size.times {|i|
           counts[i] = Hash.new if counts[i].nil?
           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
@@ -740,7 +740,7 @@ class SQLite < DBwrapper
         query += "protein_id = #{taxon}"
         name, taxonomy = @connection.get_first_row(query)
         if (name)
-          species = taxonomy.split("; ").last.gsub(" ","_")
+          species = taxonomy.split(/; |;/).last.gsub(" ","_")
           ali[taxon] = name + "__" + species
         end
       end
