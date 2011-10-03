@@ -187,7 +187,7 @@ if (!datasets.empty?)
           rtax = ""
           rtid = nil
         else
-          relax = newick.createClassification(list[0], taxdb, nil, true)
+          relax = newick.createClassification(row[0], taxdb, nil, true)
           rtax, rtid = summarizeClass(relax)
         end
         row[4..10] = [tax, tid, rtax, rtid]

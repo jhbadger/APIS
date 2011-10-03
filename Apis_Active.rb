@@ -147,3 +147,76 @@ def connectDB(url)
     exit(1)
   end
 end
+
+
+class NewickTree
+  # returns classification of node based on taxonomy
+  def createClassification(node_name, tax, exclude, ruleMaj)
+    consensus = []
+    return  [] if (relatives(node_name).nil?)
+    relatives(node_name).each do |list|
+      counts = []
+      list.each do |relative|
+        acc, contig = relative.split("-")
+	      contig, rest = contig.split("__")
+	      groups = tax[contig]
+	      next if groups.nil?
+        groups.size.times do |i|
+          counts[i] = Hash.new if counts[i].nil?
+          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+          counts[i][groups[i]] += 1
+        end
+      end
+      if (ruleMaj)
+        consensus.push(counts.majority)
+      else
+        consensus.push(counts.absolute)
+      end
+    end
+    return consensus.first
+  end
+end
+
+class Array
+  # return majority consensus for counts array
+  def majority
+    consensus = []
+    size.times do |i|
+      total = 0.0
+      self[i].values.each{|val|total+=val}
+      name = self[i].keys.sort {|x,y| self[i][y] <=> self[i][x]}.first
+      
+      if (self[i][name]/total > 0.5)
+        consensus[i] = name
+      else
+        consensus[i] = "Mixed"
+      end
+    end
+    return consensus
+  end
+
+  # return absolute consensus for counts array
+  def absolute
+    consensus = []
+    size.times do |i|
+      if (self[i].size == 1)
+        consensus.push(self[i].keys.first)
+      else
+        consensus.push("Mixed")
+      end
+    end
+    return consensus
+  end
+  def mostCommon
+    count = Hash.new
+    self.each do |el|
+      if (count[el].nil?)
+	      count[el] = 1
+      else
+	      count[el] += 1
+      end
+    end
+    sorted = count.keys.sort {|a, b| count[b] <=> count[a]}
+    return sorted[0]
+  end
+end
