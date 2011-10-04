@@ -62,7 +62,7 @@ connectDB(opt.host + "/" + opt.storage)
 if (opt.all || opt.exp)
   Sequence.connection.execute("select dataset from dataset").each do |row|
     dataset, rest = row
-    ARGV.push(dataset.quote) if (!opt.exp || dataset =~/#{opt.exp}/)
+    ARGV.push(dataset.to_s.quote) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
 end
 
@@ -115,7 +115,7 @@ if (!datasets.empty?)
     end
     t = "NO_TREE" if t == ""
     if (goodRank != "")
-      Sequence.connection.execute("select taxon_id from phylodb.taxonomy where name = '#{goodRank.quote}' limit 1").each do |row|
+      Sequence.connection.execute("select taxon_id from phylodb.taxonomy where name = '#{goodRank.to_s.quote}' limit 1").each do |row|
         tid = row.first
       end
     end
@@ -169,7 +169,7 @@ if (!datasets.empty?)
     query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
     query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
     query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opt.schmidt)
-    query += "WHERE sequence.dataset='#{dataset.quote}'"
+    query += "WHERE sequence.dataset='#{dataset.to_s.quote}'"
     query += " AND filtered = 1 " if (opt.schmidt)
     query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
     query += " LIMIT #{opt.limit}" if (opt.limit)
@@ -203,8 +203,8 @@ if (!datasets.empty?)
       end
       row.push(tree) if (opt.tree)
       if (opt.blast)
-        query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset.quote}' AND "
-        query += "seq_name = '#{row[0].quote}' ORDER BY evalue ASC LIMIT 1"
+        query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset.to_s.quote}' AND "
+        query += "seq_name = '#{row[0].to_s.quote}' ORDER BY evalue ASC LIMIT 1"
         subject_name, subject_description, evalue = nil, nil, nil
         Sequence.connection.execute(query).each do |row|
           subject_name, subject_description, evalue = row
