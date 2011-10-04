@@ -220,3 +220,9 @@ class Array
     return sorted[0]
   end
 end
+
+class String
+  def quote
+    return self.gsub(/\\/, '\&\&').gsub(/'/, "''")
+  end
+end
