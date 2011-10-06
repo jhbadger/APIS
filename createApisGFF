@@ -1,16 +1,9 @@
 #!/usr/bin/env ruby
 
-# createApisCSV is a script for generating reports from an existing APIS run, or sets of runs. This output can be in the 
-# form of csv file(s) or tab delimited file(s). By default, the sequence name, dataset, seq length, annotation, 
-# classification, and NCBI tax id of the classification are reported, but other fields, such as bootstrap value and the
-# "relaxed" classification can be included
-
 require 'optparse'
-require 'dm-core'
 require 'Newick'
 require 'ostruct'
 require 'csv'
-require 'ComboDB'
 require 'ApisDB'
 
 opt = OpenStruct.new
@@ -21,7 +14,7 @@ opt.storage = "misc_apis"
 opt.ann = false
 
 
-ARGV.options {|o|
+ARGV.options do |o|
   o.banner << " dataset"
   o.on("-a", "--annotation", "get contig info from input annotation, not orfname") {|t| opt.ann = t}
   o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
@@ -38,13 +31,11 @@ ARGV.options {|o|
     STDERR << o
     exit(1)
   end
-}
+end
 
 dataset = ARGV.shift
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
-
-db = repository(:default).adapter
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 query = "SELECT sequence.seq_name, kingdom, phylum, class AS cl, ord, family, genus, species, input_ann.annotation as in_ann, apis_ann.annotation as ap_ann FROM sequence "
 query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name AND classification.dataset = sequence.dataset "
@@ -53,12 +44,13 @@ query += "LEFT JOIN annotation as apis_ann ON apis_ann.seq_name = sequence.seq_n
 
 query += "WHERE sequence.dataset = '#{dataset}'"
 query += " LIMIT #{opt.limit}" if opt.limit
-db.select(query).each do |row|
+db.query(query).each do |row|
+  seq_name, kingdom, phylum, cl, ord, family, genus, species, in_ann, ap_ann = row
   frame = 1
   if (!opt.ann)
-     contig, start, stop = row.seq_name.split("_")
+     contig, start, stop = seq_name.split("_")
   else
-    if (row.in_ann =~/\/read_id=([A-Z|a-z|\_|0-9]+) \/begin=([0-9]*) \/end=([0-9]*) \/orientation=([0-9|-]+)/)
+    if (in_ann =~/\/read_id=([A-Z|a-z|\_|0-9]+) \/begin=([0-9]*) \/end=([0-9]*) \/orientation=([0-9|-]+)/)
      contig, start, stop, strand = $1, $2, $3, $4
      start, stop = stop, start if (strand == "-1")
    end
@@ -72,13 +64,13 @@ db.select(query).each do |row|
     strand = "+"
   end
   ann = ""
-  ann += "annotation \"" + row.ap_ann + "\" " if !row.ap_ann.nil?
-  ann += "kingdom \"" + row.kingdom + "\" " if !row.kingdom.nil?
-  ann += "phylum \"" + row.phylum + "\" " if !row.phylum.nil?
-  ann += "class \"" + row.cl + "\" " if !row.cl.nil?
-  ann += "order \"" + row.ord + "\" " if !row.ord.nil?
-  ann += "family \"" + row.family + "\" " if !row.family.nil?
-  ann += "genus \"" + row.genus + "\" " if !row.genus.nil?
-  ann += "species \"" + row.species + "\" " if !row.species.nil?
+  ann += "annotation \"" + ap_ann + "\" " if !ap_ann.nil?
+  ann += "kingdom \"" + kingdom + "\" " if !kingdom.nil?
+  ann += "phylum \"" + phylum + "\" " if !phylum.nil?
+  ann += "class \"" + cl + "\" " if !cl.nil?
+  ann += "order \"" + ord + "\" " if !ord.nil?
+  ann += "family \"" + family + "\" " if !family.nil?
+  ann += "genus \"" + genus + "\" " if !genus.nil?
+  ann += "species \"" + species + "\" " if !species.nil?
   printf("%s\t%s\t%s\t%d\t%d\t%s\t%s\t%d\t%s\n", contig, "APIS", "CDS", start, stop, ".", strand, frame, ann)
 end

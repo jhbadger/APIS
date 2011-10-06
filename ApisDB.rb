@@ -1,122 +1,164 @@
-class Dataset
-  include DataMapper::Resource
-  storage_names[:default] = "dataset"
-  has n, :sequences
-  property :id, String, :field => "dataset", :length => 50, :key => true
-  property :owner, String, :length => 50
-  property :date_added, Date
-  property :database_used, String, :length => 100
-  property :comments, String, :length => 1000
-end
+require 'mysql'
 
-class Sequence
-  include DataMapper::Resource
-  storage_names[:default] = "sequence"
-  belongs_to :dataset
-  has n, :alignments, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  has n, :annotations, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  has n, :blasts, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  has 1, :classification, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  has 1, :tree, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true, :index => true
-  property :name, String, :field => "seq_name", :length => 100, :key => true, :index => true
-  property :sequence, Text, :lazy => false
-  property :processed, Boolean, :default => 0
-  def cog
-    if (tree.nil?)
-      return ""
+class ApisDB
+  # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
+  def initialize(uri)
+    token = "[a-z|0-9|A-Z|_|-]+"
+    if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})/)
+      @driver, @user, @password, @server, @database = $1, $2, $3, $4, $5
+      connect
     else
-      homolog = tree.homolog
-      cogs = DataMapper.repository(:combodb) {Protein.first(:name => homolog).blastmatches.cogs}
-      return cogs.first.to_s
+      STDERR << "can't parse " << uri << "\n"
+      exit(1)
     end
   end
-end
-
-class Alignment
-  include DataMapper::Resource
-  storage_names[:default] = "alignment"
-  belongs_to :sequence, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true
-  property :seq_name, String, :length => 100, :key => true
-  property :alignment_name, String, :length => 100
-  property :alignment_desc, String, :length => 1000
-  property :alignment_sequence, Text, :lazy => false
-end
-
-class Annotation
-  include DataMapper::Resource
-  storage_names[:default] = "annotation"
-  belongs_to :sequence, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true
-  property :seq_name, String, :length => 100, :key => true
-  property :annotation, String, :length => 10000
-  property :source, String, :length => 100, :key => true
-  def to_s
-    return annotation
-  end
-end
-
-class Blast
-  include DataMapper::Resource
-  storage_names[:default] = "blast"
-  belongs_to :sequence, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true
-  property :seq_name, String, :length => 100, :key => true
-  property :subject_name, String, :length => 100, :key => true
-  property :subject_description, String, :length => 100
-  property :subject_length, Integer
-  property :query_start, Integer, :key => true
-  property :query_end, Integer
-  property :subject_start, Integer, :key => true
-  property :subject_end, Integer
-  property :identity, Float
-  property :similarity, Float
-  property :score, Integer
-  property :evalue, Float
-end
-
-class Classification
-  include DataMapper::Resource
-  storage_names[:default] = "classification"
-  belongs_to :sequence, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true
-  property :seq_name, String, :length => 100, :key => true
-  property :kingdom, String, :length => 50, :index => true
-  property :kingdom_outgroup, Boolean, :index => true
-  property :phylum, String, :length => 50, :index => true
-  property :phylum_outgroup, Boolean, :index => true
-  property :classname, String, :field => "class", :length => 50, :index => true
-  property :class_outgroup, Boolean, :index => true
-  property :ord, String, :length => 50, :index => true
-  property :ord_outgroup, Boolean, :index => true
-  property :family, String, :length => 50, :index => true
-  property :family_outgroup, Boolean, :index => true
-  property :genus, String, :length => 50, :index => true
-  property :genus_outgroup, Boolean, :index => true
-  property :species, String, :length => 50, :index => true
-  property :species_outgroup, Boolean, :index => true
-  def to_s
-    s = ""
-    [kingdom, phylum, classname, ord, family, genus, species].each do |level|
-      s += (level + "; ") #if (level != "Mixed" && level != "Undefined")
+  
+  # connect to database, looping until connection obtained
+  def connect
+    @connected = false
+    while(!@connected)
+      begin
+        if (@driver == "mysql")
+          @db = Mysql.new(@server, @user, @password, @database)
+          @connected = true
+        else
+          STDERR << "only mysql right now -- can't parse " << uri << "\n"
+          exit(1)
+        end
+      rescue
+        sleep 0.2
+      end
     end
-    return s    
   end
-end
-
-class Tree
-  include DataMapper::Resource
-  storage_names[:default] = "tree"
-  belongs_to :sequence, :child_key=>[:dataset_id, :seq_name], :parent_key=>[:dataset_id, :name]
-  property :dataset_id, String, :field => "dataset", :length => 50, :key => true
-  property :seq_name, String, :length => 100, :key => true
-  property :tree, Text, :lazy => false
-  def to_s
-    return tree.chomp
+  
+  # query db with sql and return query result class in array form
+  def query(sql)
+    begin
+      return @db.query(sql)
+    rescue Exception => e
+      if (e.message =~/not connected/)
+        connect
+        retry
+      else
+        raise e
+      end
+    end
   end
-  def homolog
-    pname = NewickTree.new(tree).relatives(seq_name).first.first.split("__").first
+  
+  # return first row data immediately from query 
+  def get(sql)
+    begin
+      return @db.query(sql).fetch_row
+    rescue Exception => e
+      if (e.message =~/not connected/)
+        connect
+        retry
+      else
+        raise e
+      end
+    end
+  end
+  
+  # close connection
+  def close
+    @db.close
+  end
+  
+  # return taxonomy hash of contigs
+  def contigs_tax
+    taxdb = Hash.new
+    query("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
+      name, species, taxonomy = row
+      taxdb[species] = taxonomy.split(/; |;/)
+      taxdb[name] = taxdb[species]
+    end
+    return taxdb
+  end
+  
+  # return taxonomy array/string based on taxid
+  def buildTaxFromTaxId(taxid, string = false, verbose = false)
+    levels = ["kingdom", "phylum", "class", "order", "family", 
+              "genus", "species"]
+    name = ""
+    pid = ""
+    rank = ""
+    tax = [""]*7
+    while (name != "root")
+      query = "select parent_id, name, rank from phylodb.taxonomy WHERE tax_id = #{taxid}"
+      pid, name, rank = get(query)
+      STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) if verbose
+      return nil if pid.nil?
+      pos = levels.index(rank)
+      if (pos.nil?)
+        pos = 0 if name == "Viruses" || name == "Viroids"
+        pos = 1 if name =~ /viruses/
+      end
+      tax[pos] = name.tr(",()[]'\"/","") if (pos)
+      taxid = pid
+    end
+    6.step(0, -1) do |i|
+      if (tax[i] == "")
+        tax[i] = tax[i + 1].split(" (").first + " (" + levels[i] + ")"
+      end
+    end
+    if (string)
+      tline = ""
+      tax.each {|lev|
+        tline += lev
+        tline += "; " if lev != tax.last
+      }
+      return tline
+    else
+      return tax
+    end
+  end
+  
+  # return taxonomic grouping used in the GOS analysis
+  def gos_taxonomy(kingdom, phylum, cl, ord, family, genus, species)
+    if genus =~/Pelagibacter|SAR11/
+      taxon = "SAR11"
+    elsif ord =~/Rhodobacterales/
+      taxon = "Rhodobacterales"
+    elsif cl == "Alphaproteobacteria"
+      taxon = "Other Alphaproteobacteria"
+    elsif genus =~/Prochlorococcus/ || family =~/Prochlorococcus/
+      taxon = "Prochlorococcus"
+    elsif cl == "Gammaproteobacteria"
+      taxon = "Gammaproteobacteria"
+    elsif phylum =~/Bacteroidetes|Chlorobi/
+      taxon = "Bacteroidetes/Chlorobi"
+    elsif phylum == "Firmicutes"
+        taxon = "Firmicutes"
+    elsif phylum == "Actinobacteria"
+      taxon = "Actinobacteria"
+    elsif phylum == "Actinobacteria"
+      taxon = "Actinobacteria"
+    elsif cl == "Betaproteobacteria"
+      taxon = "Betaproteobacteria"
+    elsif cl == "Deltaproteobacteria" || ord == "Deltaproteobacteria"
+      taxon = "Deltaproteobacteria"
+    elsif cl == "Epsilonproteobacteria"
+      taxon = "Epsilonproteobacteria"
+    elsif phylum == "Proteobacteria"
+      taxon = "Other Proteobacteria"
+    elsif phylum == "Spirochaetes"
+      taxon = "Spirochaetes"
+    elsif phylum == "Thermotogae"
+      taxon = "Thermotogae"
+    elsif phylum == "Planctomycetes"
+      taxon = "Planctomycetes"
+    elsif phylum =~/Chlamydiae|Verrucomicrobia/
+      taxon = "Chlamydiae/Verrucomicrobia"
+    elsif genus =~/Synechococcus/ || ord =~/Synechococcus/
+      taxon = "Synechococcus"
+    elsif phylum == "Cyanobacteria"
+      taxon = "Other Cyanobacteria"
+    elsif phylum == "Mixed"
+      taxon = "Mixed"
+    else
+      taxon = "Other"
+    end
+    return taxon
   end
 end
 
@@ -190,5 +232,17 @@ class NewickTree
       end
     end
     return consensus.first
+  end
+end
+
+# quotes single quotes, etc. for SQL usage
+class String
+  # quotes single quotes, etc. for SQL usage
+  def quote
+    return self.gsub(/\\/, '\&\&').gsub(/'/, "''")
+  end
+  # formats string as fasta record
+  def to_fasta(header, len = 60)
+    return ">#{header}\n#{self.gsub("*","").gsub(Regexp.new(".{1,#{len}}"), "\\0\n")}"
   end
 end

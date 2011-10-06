@@ -1,9 +1,8 @@
 #!/usr/bin/env ruby
 
-require 'PhyloDB'
+require 'ApisDB'
 require 'optparse'
 require 'ostruct'
-require 'bio'
 
 opt = OpenStruct.new
 opt.name = false
@@ -15,14 +14,15 @@ opt.rna = false
 opt.molecule = false
 opt.file = false
 opt.form = false
-
+opt.host = "mysql://access:access@mysql-lan-pro"
 
 o = OptionParser.new
 o.banner << " id...id..."
 o.on("-c", "--contig", "use contig as search id") {opt.contig = true}
 o.on("-s", "--species", "use species as search id") {opt.species = true}  
 o.on("-n", "--name", "use (exact) sequence name as search id") {opt.name = true}  
-o.on("-g", "--form", "use contig form as search id") {opt.form = true}  
+o.on("-g", "--form", "use contig form as search id") {opt.form = true}
+o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}  
 o.on("-t", "--taxonomy", "use taxonomy as search id") {opt.taxonomy = true}
 o.on("-m", "--molecule", 
      "return full DNA molecules of contigs") {opt.molecule = true}  
@@ -52,41 +52,56 @@ else
   ids = ARGV
 end
 
-ActiveRecord::Base.establish_connection(:adapter  => 'mysql',
-:host => 'mysql-lan-pro', :username=>'jbadger', :password=>'plankton',
-:database=>'phylodb')
 
-contig_names = []
+db = ApisDB.new(opt.host + "/phylodb")
 
+inList = "("
 ids.each do |id|
   if (opt.species)
-    contig_names += Contig.find(:all, :select=>"name", :conditions=>"species LIKE '#{id}%'")
+    query = "SELECT name FROM contigs WHERE species LIKE '%#{id.quote}%'"
   elsif (opt.taxonomy)
-    contig_names += Contig.find(:all, :select=>"name", :conditions=>"taxonomy LIKE '%#{id}%'")
+    query = "SELECT name FROM contigs WHERE taxonomy LIKE '%#{id.quote}%'"
   elsif (opt.form)
-    contig_names += Contig.find(:all, :select=>"name", :conditions=>"form LIKE '%#{id}%'")
+    query = "SELECT name FROM contigs WHERE form LIKE '%#{id.quote}%'"
+  end
+  if (!opt.name)
+    db.query(query).each do |row|
+      inList += "'" + row[0].quote + "',"
+    end
+  else
+    inList += "'" + id.quote + "',"
   end
 end
+inList.chop!
+inList += ")"
 
 if (opt.dna)
-  Transcript.includes(:contig, :protein).find_each(:conditions=>{:contig_name => contig_names}) do |cdna|
-    print cdna.to_fasta
-  end
+  query = "SELECT proteins.name, transcripts.seq, annotation, species FROM proteins "
+  query += "LEFT JOIN contigs on contigs.name = proteins.contig_name "
+  query += "LEFT JOIN transcripts on transcripts.name = proteins.name "
+  query += "WHERE proteins.contig_name IN #{inList}"
 elsif (opt.rna)
-  Rrna.includes(:contig).find_each(:conditions=>{:contig_name => contig_names}) do |rrna|
-    print rrna.to_fasta
-  end
+  query = "SELECT rrnas.name, rrnas.seq, annotation, species FROM rrnas "
+  query += "LEFT JOIN contigs on contigs.name = rrnas.contig_name "
+  query += "WHERE rrnas.contig_name IN #{inList}"
 elsif (opt.molecule)
-  Contig.find_each(:conditions => {:name => contig_names}) do |contig|
-    print contig.to_fasta
-  end
+  query = "SELECT name, seq, form, species FROM contigs "
+  query += "WHERE name IN #{inList}"
 elsif (opt.name)
-  Protein.includes(:contig).find_each(:conditions =>{:name=>ids}) do |prot|
-    print prot.to_fasta
-  end
+  query = "SELECT proteins.name, proteins.seq, annotation, species FROM proteins "
+  query += "LEFT JOIN contigs on contigs.name = proteins.contig_name "
+  query += "WHERE proteins.name IN #{inList}"
 else
-  Protein.includes(:contig).find_each(:conditions=>{:contig_name => contig_names}) do |prot|
-    print prot.to_fasta
-  end
+  query = "SELECT proteins.name, proteins.seq, annotation, species FROM proteins "
+  query += "LEFT JOIN contigs on contigs.name = proteins.contig_name "
+  query += "WHERE proteins.contig_name IN #{inList}"
 end
+
+db.query(query).each do |row|
+  seq_name, seq, ann, species = row
+  print seq.to_fasta(seq_name + " " + ann + " " + "{" + species + "}")
+end
+
+
+
 

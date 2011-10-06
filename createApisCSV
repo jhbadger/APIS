@@ -9,26 +9,24 @@ require 'optparse'
 require 'Newick'
 require 'ostruct'
 require 'csv'
-require 'Apis_Active'
+require 'ApisDB'
 
 opt = OpenStruct.new
 
 opt.all = false
 opt.host = "mysql://access:access@mysql-lan-pro"
 opt.storage = "misc_apis"
-opt.proteindb = "phylodb"
 opt.tree = false
 opt.boot = false
 opt.cut = false
 opt.delim = false
 opt.exp = false
 opt.file = false
-opt.schmidt = false
 opt.relax = false
 opt.limit = false
 opt.blast = false
 
-ARGV.options {|o|
+ARGV.options do |o|
   o.banner << " [dataset .. dataset..]"
   o.on("-a", "--all", "include all datasets in database (#{opt.all})") {opt.all = true}
   o.on("-b", "--bootstrap", "include bootstrap value (#{opt.boot})") {|t| opt.boot = t}
@@ -38,12 +36,10 @@ ARGV.options {|o|
   o.on("-f ", "--file ", String, "only include ids from file") {|t| opt.file = t}
   o.on("-h ", "--host ", String, "database host (#{opt.host})") {|t| opt.host = t}
   o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opt.limit = t}
-  o.on("-p ", "--proteindb ", String, "protein database (default #{opt.proteindb})") {|t| opt.proteindb = t}
   o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
   o.on("-y", "--blast", "include top BLAST hit (#{opt.blast})") {opt.blast = true}
-  o.on("-z", "--filtered", "only include schmidt filtered (#{opt.schmidt})") {opt.schmidt = true}
   begin
     o.parse!
   rescue
@@ -55,12 +51,12 @@ ARGV.options {|o|
     STDERR << o
     exit(1)
   end
-}
+end
 
-connectDB(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 if (opt.all || opt.exp)
-  Sequence.connection.execute("select dataset from dataset").each do |row|
+  db.query("select dataset from dataset").each do |row|
     dataset, rest = row
     ARGV.push(dataset.to_s.quote) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
@@ -91,17 +87,12 @@ if (!datasets.empty?)
 
   if (opt.tree || opt.relax)
     STDERR << "Loading Taxonomy...\n"
-    taxdb = Hash.new
-    Sequence.connection.execute("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
-      name, species, taxonomy = row
-      taxdb[species] = taxonomy.split("; ")
-      taxdb[name] = taxdb[species]
-    end
+    taxdb = db.contigs_tax
   else
     taxdb = nil
   end
 
-  def summarizeClass(tax)
+  def summarizeClass(db, tax)
     t = ""
     tid = nil
     goodRank = ""
@@ -115,7 +106,7 @@ if (!datasets.empty?)
     end
     t = "NO_TREE" if t == ""
     if (goodRank != "")
-      Sequence.connection.execute("select taxon_id from phylodb.taxonomy where name = '#{goodRank.to_s.quote}' limit 1").each do |row|
+      db.query("select taxon_id from phylodb.taxonomy where name = '#{goodRank.to_s.quote}' limit 1").each do |row|
         tid = row.first
       end
     end
@@ -139,10 +130,7 @@ if (!datasets.empty?)
   query = "SELECT count(*) FROM sequence WHERE dataset in ('#{datasets.join('\',\'')}')"
   query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
   STDERR << "Counting sequences...\n"
-  num = nil
-  Sequence.connection.execute(query).each do |row|
-    num = row.first.to_i
-  end
+  num = db.get(query).first.to_i
   milestone = num / 200.0
 
   file = STDOUT
@@ -153,7 +141,8 @@ if (!datasets.empty?)
   STDERR << "Writing Spreadsheet...\n"
 
   datasets.each do |dataset|
-    connectDB(opt.host + "/" + opt.storage)
+    db.close
+    db.connect
     if (opt.cut)
       file.close if file != STDOUT
       file = File.new(dataset + ext, "w")
@@ -168,20 +157,18 @@ if (!datasets.empty?)
     query += "AND sequence.dataset = tree.dataset " 
     query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
     query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
-    query += " LEFT JOIN schmidt_filtered ON schmidt_filtered.seq_name = sequence.seq_name " if (opt.schmidt)
     query += "WHERE sequence.dataset='#{dataset.to_s.quote}'"
-    query += " AND filtered = 1 " if (opt.schmidt)
     query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
     query += " LIMIT #{opt.limit}" if (opt.limit)
   
-    Sequence.connection.execute(query).each do |row|
+    db.query(query).each do |row|
       tree = row.pop
       begin
         newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
       rescue
         newick = nil
       end
-      tax, tid = summarizeClass(row[4..10])
+      tax, tid = summarizeClass(db, row[4..10])
       if (opt.relax)
         if (tree.nil? || newick.nil?)
           rtax = ""
@@ -206,11 +193,9 @@ if (!datasets.empty?)
         query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset.to_s.quote}' AND "
         query += "seq_name = '#{row[0].to_s.quote}' ORDER BY evalue ASC LIMIT 1"
         subject_name, subject_description, evalue = nil, nil, nil
-        Sequence.connection.execute(query).each do |row|
-          subject_name, subject_description, evalue = row
-        end
+        blastHit = db.get(query)
         if (!blastHit.nil?)
-          list.push(blastHit["subject_name"],blastHit["subject_description"], blastHit["evalue"])
+          row += blastHit
         end
       end
       file << row.to_csv({:col_sep=>opt.delim})
@@ -220,3 +205,4 @@ if (!datasets.empty?)
   end
   file.close if file != STDOUT
 end
+db.close

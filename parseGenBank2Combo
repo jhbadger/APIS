@@ -201,9 +201,7 @@ ARGV.each do |gb|
       end
     end
     if (opt.tax)
-      require 'dm-core'
-      require 'ComboDB'
-      DataMapper.setup(:combodb, "mysql://access:access@mysql-lan-pro/phylodb_annotation")
+      db = ApisDB.new("mysql://access:access@mysql-lan-pro/phylodb")
       taxonomy = buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)

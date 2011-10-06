@@ -1,27 +1,23 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'dm-core'
 require 'Newick'
 require 'ostruct'
 require 'csv'
-require 'ComboDB'
-require 'ComboDB-metadata'
 require 'ApisDB'
 
-opts = OpenStruct.new
+opt = OpenStruct.new
 
-opts.all = false
-opts.host = "mysql://access:access@mysql-lan-pro"
-opts.storage = "misc_apis"
-opts.proteindb = "phylodb"
+opt.all = false
+opt.host = "mysql://access:access@mysql-lan-pro"
+opt.storage = "misc_apis"
 
 
-ARGV.options {|o|
+ARGV.options do |o|
   o.banner << " [dataset .. dataset..]"
-  o.on("-a", "--all", "include all datasets in database") {|t| opts.all = true}
-  o.on("-h ", "--host ", String, "database host (default #{opts.host})") {|t| opts.host = t}
-  o.on("-s ", "--storage ", String, "storage database (default #{opts.storage})") {|t| opts.storage = t}
+  o.on("-a", "--all", "include all datasets in database") {|t| opt.all = true}
+  o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
+  o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   begin
     o.parse!
   rescue
@@ -29,28 +25,27 @@ ARGV.options {|o|
     STDERR.puts o
     exit(1)
   end
-  if (ARGV.size < 1 && !opts.all)
+  if (ARGV.size < 1 && !opt.all)
     STDERR.puts o
     exit(1)
   end
-}
+end
 
-DataMapper.setup(:default, opts.host + "/" + opts.storage)
-DataMapper.setup(:combodb, opts.host + "/" + opts.proteindb)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 inList = "("
-if (opts.all)
-  Dataset.all.each do |dset|
-    inList += ("'" + dset.id + "',")
+if (opt.all)
+  db.query("SELECT dataset FROM dataset").each do |row|
+    inList += ("'" + row.first.quote + "',")
   end
 elsif ARGV.first.index("%")
   wild = ARGV.pop
-  Dataset.all(:id.like => wild).each do |dset|
-    inList += ("'" + dset.id + "',")
+  db.query("SELECT dataset FROM dataset WHERE dataset like '#{wild}'").each do |row|
+    inList += ("'" + row.first.quote + "',")
   end
 else
   ARGV.each do |dset|
-    inList += ("'" + dset + "',")
+    inList += ("'" + dset.quote + "',")
   end
 end
 
@@ -66,21 +61,22 @@ header.push("Absolute Classification", "Majority Classification")
 print header.to_csv
 
 STDERR << "Loading Taxonomy...\n"
-tax = repository(:combodb){Contig.tax}
+tax = db.contigs_tax
 STDERR << "Counting Trees...\n"
-trees = repository(:default).adapter.select("SELECT seq_name, dataset, tree FROM tree WHERE dataset IN #{inList}")
-tnum = trees.size
+trees = db.query("SELECT seq_name, dataset, tree FROM tree WHERE dataset IN #{inList}")
+tnum = trees.num_rows
 STDERR << "Processing Trees....\n"
 count = 0
 trees.each do |row|
+  seq_name, dataset, tree = row
   begin
-    tree = NewickTree.new(row.tree)
-    abscl = tree.createClassification(row.seq_name, tax, nil, false)
-    majcl = tree.createClassification(row.seq_name, tax, nil, true)
-    print [row.seq_name, row.dataset, abscl, majcl].to_csv
+    tree = NewickTree.new(tree)
+    abscl = tree.createClassification(seq_name, tax, nil, false)
+    majcl = tree.createClassification(seq_name, tax, nil, true)
+    print [seq_name, dataset, abscl, majcl].to_csv
     count += 1
     STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)
   rescue
-    STDERR << "Problem processing " << row.seq_name << ":" << $! << "\n"
+    STDERR << "Problem processing " << seq_name << ":" << $! << "\n"
   end
 end

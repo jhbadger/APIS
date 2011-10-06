@@ -1,11 +1,9 @@
 #!/usr/bin/env ruby
 
-require 'dm-core'
 require 'Newick'
 require 'optparse'
 require 'ApisDB'
-require 'ComboDB'
-require 'fastercsv'
+require 'csv'
 require 'ostruct'
 
 opt = OpenStruct.new
@@ -18,15 +16,12 @@ opt.name = false
 opt.exclude = false
 opt.must = false
 opt.host = "mysql://access:access@mysql-lan-pro"
-opt.database = "phylodb"
 opt.storage = "misc_apis"
 opt.verbose = false
 
 o = OptionParser.new
 o.banner << " dataset"
 o.on("-c", "--contig", "don't show contig (false)") {opt.contig = true}
-o.on("-d ", "--database ", String, 
-     "query database (default #{opt.database})") {|d| opt.database = d}
 o.on("-e ", "--exclude ", String, "exclude from target") {|e| opt.exclude = e}
 o.on("-h ", "--host ", String, 
      "database host (default #{opt.host})") {|h| opt.host = h}
@@ -94,19 +89,20 @@ def summarizeTax(consense)
   return summary
 end
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
-DataMapper.setup(:combodb, opt.host + "/" + opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 species = Hash.new
 taxonomy = Hash.new
 STDERR << "Loading Contig Info...\n"
-repository(:combodb) {Contig.all}.each do |contig|
-  species[contig.name] = contig.species
-  taxonomy[contig.name] = contig.taxonomy
+db.query("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
+  name, sp, tx = row
+  species[name] = sp
+  taxonomy[name] = tx
 end
+
 STDERR << "Loading Trees...\n"
 
-treeCount = repository(:default).adapter.select("SELECT count(*) FROM tree WHERE dataset = '#{dataset}'").first
+treeCount = db.get("SELECT count(*) FROM tree WHERE dataset = '#{dataset.quote}'").first.to_i
 
 opt.target = convertTax(opt.target) 
 opt.ingroup = convertTax(opt.ingroup)
@@ -115,15 +111,16 @@ opt.must = convertTax(opt.must)
 
 print ["Id", "Tree", "Target", "Bootstrap", "Annotation"].to_csv
 count = 0
-repository(:default).adapter.select("SELECT seq_name, tree FROM tree WHERE dataset = '#{dataset}'").each do |tree|
+db.query("SELECT seq_name, tree FROM tree WHERE dataset = '#{dataset}'").each do |row|
+  seq_name, tree = row
   begin
-    root =  NewickTree.new(tree.tree).root
+    root =  NewickTree.new(tree).root
   rescue
-    STDERR << "Cannot parse tree for #{tree.seq_name}...\n"
+    STDERR << "Cannot parse tree for #{seq_name}...\n"
     next
   end
   alltaxa = root.taxa.size
-  query = root.findNode(tree.seq_name)
+  query = root.findNode(seq_name)
   count += 1
   STDERR.printf("%4.2f%% done...\n", count*100.0/treeCount) if (count % 1000 == 0)
   if (!query.nil?)
@@ -135,7 +132,7 @@ repository(:default).adapter.select("SELECT seq_name, tree FROM tree WHERE datas
     while (query != nil && query.taxa.size < alltaxa)
       consense = []
       query.taxa.each do |taxon|
-        next if taxon == tree.seq_name
+        next if taxon == seq_name
         if (!opt.name)
           tname = taxonomy[taxon.split(/-|__/)[1]]
         else
@@ -176,10 +173,10 @@ repository(:default).adapter.select("SELECT seq_name, tree FROM tree WHERE datas
     end
     if (found && ((only || !opt.only) || ingroup))
       if (must || !opt.must)
-        tid = tree.seq_name
+        tid = seq_name
         tid = tid.split("-").first.gsub("ORF","") if opt.contig
-        ann = repository(:default).adapter.select("SELECT annotation FROM annotation WHERE seq_name = '#{tree.seq_name}' AND dataset = '#{dataset}' AND source = 'APIS'")
-        print [tid, tree.tree.chomp, summarizeTax(consense), boot, ann.first].to_csv
+        ann = db.get("SELECT annotation FROM annotation WHERE seq_name = '#{seq_name.quote}' AND dataset = '#{dataset.quote}' AND source = 'APIS'")
+        print [tid, chomp, summarizeTax(consense), boot, ann.first].to_csv
       end
     end
   end

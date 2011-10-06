@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-require 'dm-core'
+require 'ApisDB'
 require 'optparse'
 require 'ostruct'
 require 'csv'
@@ -27,10 +27,13 @@ end
 
 csv, rest = ARGV
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
-db = repository(:default).adapter
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
-datasets = db.select("SELECT dataset FROM dataset")
+datasets = []
+db.query("SELECT dataset FROM dataset").each do |row|
+  datasets.push(row[0])
+end
+
 seen = Hash.new
 
 CSV.foreach(csv, options = {:headers => true, :converters => :numeric}) do |row|

@@ -2,7 +2,7 @@
 
 require 'optparse'
 require 'ostruct'
-require 'Apis_Active'
+require 'ApisDB'
 require 'gchart'
 require 'csv'
 
@@ -38,7 +38,7 @@ ARGV.options do |opts|
   end
 end
 
-connectDB(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 fieldNames =  ["kingdom","phylum","class","ord","family","genus","species"]
 rank = fieldNames[opt.level]
@@ -46,7 +46,7 @@ out = File.new("chart_#{rank}.html", "w")
 
 if (opt.all || opt.exp)
   sets = []
-  Sequence.connection.execute("select dataset from dataset").each do |row|
+  db.query("SELECT dataset FROM dataset").each do |row|
     dataset, rest = row
     sets.push(dataset) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
@@ -58,7 +58,7 @@ metadata = Hash.new
 if (opt.prop)
   sets = []
   query = "SELECT dataset, value FROM metadata WHERE prop = '#{opt.prop}'"
-  Sequence.connection.execute(query).each do |row|
+  db.query(query).each do |row|
     dataset, value = row
     metadata[value] = "IN (" if metadata[value].nil?
     sets.push(value) if (!sets.include?(value))
@@ -82,7 +82,7 @@ sets.each do |dataset|
   else
     query = "SELECT COUNT(*) num, #{rank} FROM classification WHERE dataset = '#{dataset}' GROUP BY #{rank}"
   end
-  Sequence.connection.execute(query).each do |row|
+  db.query(query).each do |row|
     num, taxon = row
     next if taxon == "Undefined"
     counts[taxon] = num.to_i

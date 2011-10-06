@@ -1,10 +1,8 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'Apis_Active'
-require 'Newick'
+require 'ApisDB'
 require 'ostruct'
-require 'bio'
 
 opt = OpenStruct.new
 
@@ -12,16 +10,14 @@ opt.all = false
 opt.file = false
 opt.inverse = false
 opt.storage = "misc_apis"
-opt.host = "mysql-lan-pro"
-opt.user = "access"
-opt.password = "access"
+opt.host = "mysql://access:access@mysql-lan-pro"
 opt.split = false
 opt.tax = nil
 opt.ann = false
 opt.taxonomy = nil
 opt.exp = nil
 
-ARGV.options {|o|
+ARGV.options do |o|
   o.banner << " [dataset...dataset]"
   o.on("-a", "--all", "dump all datasets") {opt.all = true}
   o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
@@ -30,8 +26,6 @@ ARGV.options {|o|
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|s| opt.storage = s}
   o.on("-t ", "--taxonomy ", String, "only print with matching taxonomy") {|t| opt.taxonomy = t}
   o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
-  o.on("-u ", "--user ", String, "database user (default #{opt.user})") {|h| opt.user = h}
-  o.on("-p ", "--password ", String, "database password (default #{opt.password})") {|h| opt.password = h}
   o.on("-v", "--inverse", "return lines not matching expression") {opt.inverse = true}
   o.on("-x", "--split", "make separate file for each dataset") {opt.split = true}
   begin
@@ -45,15 +39,13 @@ ARGV.options {|o|
     STDERR << o
     exit(1)
   end
-}
+end
 
-ActiveRecord::Base.establish_connection(:adapter  => 'mysql',
-:host => opt.host, :username=>opt.user, :password=>opt.password,
-:database=>opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 if (opt.all || opt.exp)
-  Apisrun.find_each(:select => "dataset") do |run|
-    ARGV.push(run.dataset) if (!opt.exp || run.dataset =~/#{opt.exp}/)
+  db.query("SELECT dataset FROM dataset").each do |row|
+    ARGV.push(row[0]) if (!opt.exp || row[0] =~/#{opt.exp}/)
   end
 end
 
@@ -70,31 +62,52 @@ end
 
 file = STDOUT
 
+inClause = "("
+ARGV.each do |id|
+  inClause += "'" + id.quote + "'," if (!id.nil?)
+end
+inClause.chop!
+inClause += ")"
+
 oldDataset = ""
 file = STDOUT
-Apisrun.find_each(:conditions => {:dataset=>ARGV}) do |run|
-  STDERR << "Writing peptides for #{run.dataset}...\n"
-  if (opt.split && run.dataset != oldDataset)
-    file.close if file != STDOUT
-    file = File.new(run.dataset + ".pep", "w")
-  end
+query = "SELECT sequence.seq_name, sequence.dataset, sequence"
+query += ", kingdom, phylum, class, ord, genus, species" if opt.taxonomy
+query += " FROM sequence "
+if (opt.taxonomy)
+  query += "LEFT JOIN classification ON (classification.dataset = sequence.dataset"
+  query += " AND classification.seq_name = sequence.seq_name)"
+end
+query += " WHERE sequence.dataset IN #{inClause}"
+
+db.query(query).each do |row|
+  seq_name, dataset, seq = row.shift, row.shift, row.shift
+  printIt = false
+  taxonomy = ""
   if (opt.taxonomy)
-    includeIt = :classification
-  else
-    includeIt = nil
-  end
-  run.sequences.includes(includeIt).each do |seq|
-    printIt = true
-    taxonomy = ""
-    printIt = false if (opt.file && (!picked[seq.seq_name]))
-    if (opt.taxonomy)
-      taxonomy = seq.taxonomy
-      printIt = false if (taxonomy !~/#{opt.taxonomy}/)
+    next if row[0].nil?
+    if (row.index("Mixed"))
+      ranks = row[0..row.index("Mixed")]
+    else
+      ranks = row
     end
-    printIt = !printIt if opt.inverse
-    file.print seq.to_fasta(taxonomy) if printIt
+    if (ranks)
+      taxonomy = ranks.join("; ") 
+      printIt = true if (opt.taxonomy && taxonomy =~/#{opt.taxonomy}/)
+      printIt = !printIt if (opt.inverse)
+    end
+  else
+    printIt = true
   end
-  oldDataset = run.dataset
+  STDERR << "Writing peptides for #{dataset}...\n" if (dataset != oldDataset)
+  if (opt.split && dataset != oldDataset)
+    file.close if file != STDOUT
+    file = File.new(dataset + ".pep", "w")
+  end
+  header = seq_name
+  header += " " + taxonomy if opt.taxonomy
+  file.print seq.to_fasta(header) if printIt
+  oldDataset = dataset
 end
 file.close if file != STDOUT
 

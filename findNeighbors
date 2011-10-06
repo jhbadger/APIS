@@ -1,10 +1,8 @@
 #!/usr/bin/env ruby
 
-require 'dm-core'
 require 'Newick'
 require 'optparse'
 require 'ApisDB'
-require 'ComboDB'
 require 'csv'
 require 'ostruct'
 
@@ -43,8 +41,7 @@ if (ARGV.size < 1 && (!opt.all && !opt.exp))
 end
 
 
-DataMapper.setup(:default, opt.host + "/" + opt.storage)
-DataMapper.setup(:combodb, opt.host + "/" + opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 header = ["Sequence", "Dataset", "Kingdom", "Neighbor", "Bootstrap", "Distance"]
 header += ["COG", "COG Definition"] if opt.cog
@@ -64,7 +61,7 @@ if (opt.file)
   STDERR << "Loading file of ids...\n"
   File.new(opt.file).each do |line|
     id, rest = line.chomp.split(/ |,/)
-    inClause += "'" + id + "',"
+    inClause += "'" + id.quote + "',"
   end
   inClause.chop!
   inClause += ")"
@@ -72,42 +69,42 @@ end
 
 datasets = "("
 ARGV.each do |dataset|
-  datasets += "'" + dataset + "',"
+  datasets += "'" + dataset.quote + "',"
 end
 datasets.chop!
 datasets += ")"
 
 query = "SELECT tree.seq_name, tree, tree.dataset, kingdom FROM tree, classification "
-query += "WHERE tree.dataset IN #{datasets} AND classification.dataset = tree.dataset AND "
+query += "WHERE tree.dataset IN #{datasets} AND tree.dataset = classification.dataset AND "
 query += "tree.seq_name = classification.seq_name"
 query += " AND classification.seq_name IN #{inClause}" if inClause != ""
-repository(:default).adapter.select(query).each do |tree|
+db.query(query).each do |row|
+  seq_name, tree, dataset, kingdom = row
   begin
-    newick =  NewickTree.new(tree.tree)
+    newick =  NewickTree.new(tree)
   rescue
-    STDERR << "Cannot parse tree for #{tree.seq_name}...\n"
+    STDERR << "Cannot parse tree for #{seq_name}...\n"
     next
   end
-  neighborNode = newick.findNode(newick.relatives(tree.seq_name).first.first)
-  queryNode = newick.findNode(tree.seq_name)
+  neighborNode = newick.findNode(newick.relatives(seq_name).first.first)
+  queryNode = newick.findNode(seq_name)
   lca = queryNode.lca(neighborNode)
   dist = queryNode.distToAncestor(lca) + neighborNode.distToAncestor(lca)  
-  row = [tree.seq_name, tree.dataset, tree.kingdom, neighborNode.name, lca.name, dist]
+  row = [seq_name, dataset, kingdom, neighborNode.name, lca.name, dist]
   if (opt.cog)
     id, species = neighborNode.name.split("__")
-    query = "SELECT * FROM phylodb_annotation.blast, phylodb_annotation.cog_proteins, "
-    query += "phylodb_annotation.cog_definitions where target = 'cog' AND query = '#{id}' "
+    query = "SELECT cog, definition FROM phylodb_annotation.blast, phylodb_annotation.cog_proteins, "
+    query += "phylodb_annotation.cog_definitions where target = 'cog' AND query = '#{id.quote}' "
     query += "AND hit=protein AND cog_proteins.cog = cog_definitions.cog"
-    data = repository(:default).adapter.select(query)
-    datum = data.first
+    datum = db.get(query)
     if (datum.nil?)
       cog = ""
       definition = ""
     else
-      cog = datum["cog"]
-      definition = datum["definition"]
+      cog, definition = row
     end
     row.push(cog, definition)
   end
   print row.to_csv
 end
+db.close
