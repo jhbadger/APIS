@@ -45,6 +45,13 @@ class ApisDB
     end
   end
   
+  # return count matching condition
+  def count(condition)
+    connect if (!@connected)
+    query = "SELECT count(*) FROM #{condition}"
+    return get(query).first.to_i
+  end
+  
   # return first row data immediately from query 
   def get(sql)
     begin
