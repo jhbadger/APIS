@@ -4,7 +4,7 @@ class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
   def initialize(uri)
     token = "[a-z|0-9|A-Z|_|-]+"
-    if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})/)
+    if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})*/)
       @driver, @user, @password, @server, @database = $1, $2, $3, $4, $5
       connect
     else
@@ -160,6 +160,42 @@ class ApisDB
     end
     return taxon
   end
+  
+  # return hash of apis db objects (mysql or sqlite) depending on source string
+  def  self.dbsFromSources(sources, user, password)
+    dbs = Hash.new
+    sources.each do |source|
+      db = ApisDB.new("mysql://#{user}:#{password}@#{source}/")
+      db.query("SHOW DATABASES").each do |row|
+        dbname = row[0]
+        if (dbname =~/_apis/ && !dbs[dbname])
+          dbs[dbname] = ApisDB.new("mysql://#{user}:#{password}@#{source}/#{dbname}")
+          dbs[dbname].close
+        end
+      end
+      db.close
+    end
+    return dbs
+  end
+
+  # return hash of human readable dataset names from metadata table where it exists
+  def self.populateMetaName(dbs)
+    metaName = Hash.new
+    dbs.keys.each do |dbname|
+      metaName[dbname] = Hash.new
+      table = dbs[dbname].get("SHOW TABLES WHERE tables_in_#{dbname} = 'metadata'").to_s
+      if (table != "")
+        dbs[dbname].query("SELECT dataset, value FROM metadata WHERE prop='name'").each do |row|
+          metaName[dbname][row.first] = row.last
+        end
+        dbs[dbname].query("SELECT dataset, value FROM metadata WHERE prop='location'").each do |row|
+          metaName[dbname][row.first] += " " + row.last
+        end
+      end
+    end
+    return metaName
+  end
+  
 end
 
 class Array

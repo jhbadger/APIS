@@ -4,7 +4,7 @@ require 'fpdf'
 require 'gchart'
 require 'haml'
 require 'Newick'
-require 'DBwrapper'
+require 'ApisDB'
 
 helpers do
   
@@ -22,9 +22,9 @@ helpers do
     end
     begin 
       if (dataset.nil?)
-        u, p = settings.dbs[db].selectFirst("SELECT username, password FROM password")
+        u, p = settings.dbs[db].get("SELECT username, password FROM password")
       else 
-        u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+        u, p = settings.dbs[db].get("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
       end
     rescue
       u = "" # no user/password in dataset
@@ -143,9 +143,9 @@ enable :sessions
     @title = "APIS: Automated Phylogenetic Inference System"
     @project_name = "APIS: Automated Phylogenetic Inference System"
     if (dataset.nil?)
-      u, p = settings.dbs[db].selectFirst("SELECT username, password FROM password")
+      u, p = settings.dbs[db].get("SELECT username, password FROM password")
     else
-      u, p = settings.dbs[db].selectFirst("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
+      u, p = settings.dbs[db].get("SELECT username, password FROM dataset WHERE dataset='#{dataset}'")
     end
     @main_content = "<H1>Login to #{db} #{dataset}</H1>"
     @main_content += "<FORM METHOD=post ACTION=\"#{base_uri}/validate/#{db}/#{dataset}\">\n"
