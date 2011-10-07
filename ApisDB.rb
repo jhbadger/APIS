@@ -243,6 +243,26 @@ class ApisDB
     end
   end
 
+  # return the annotation of the closest sequence to id on tree 
+  def findClosestFunction(tree, id)
+    begin
+      tree.relatives(id).each do |match|
+        acc, contig = match.first.split("-")
+        contig, rest = contig.split("__")
+        match_id = acc + "-" + contig
+        function = fetchFunction(match_id)
+        if (!function.nil? && function.split(" ").size > 1 && 
+            function !~/unnamed/ && function !~/unknown/ && 
+            function !~/numExons/ && function !~/^\{/)
+          return function
+        end
+      end
+      return false
+    rescue
+      return false
+    end
+  end
+
   # returns array of consensus taxonomy at each relative level of tree
   def consensusTax(tree, taxon, ruleMaj)
     consensus = []
@@ -252,8 +272,8 @@ class ApisDB
       list.each do |relative|
         acc, contig = relative.split("-")
         contig, rest = contig.split("__")
-        next if (tax[contig].nil? || tax[contig]["species"].nil?)
-        groups = tax[contig]["taxonomy"].split(/; |;/)
+        groups = tax[contig]
+        next if (groups.nil?)
         groups.size.times do |i|
           counts[i] = Hash.new if counts[i].nil?
           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
