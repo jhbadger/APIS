@@ -4,13 +4,12 @@ require 'optparse'
 require 'ApisDB'
 require 'ostruct'
 
-opt = OpenStruct.new
+opt = ApisDB.loadoptions
 
 opt.all = false
 opt.file = false
 opt.inverse = false
 opt.storage = "misc_apis"
-opt.host = "mysql://access:access@mysql-lan-pro"
 opt.split = false
 opt.tax = nil
 opt.ann = false

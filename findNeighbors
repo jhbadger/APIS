@@ -6,10 +6,9 @@ require 'ApisDB'
 require 'csv'
 require 'ostruct'
 
-opt = OpenStruct.new
+opt = ApisDB.loadoptions
 
 opt.all = false
-opt.host = "mysql://jbadger:plankton@mysql-lan-pro"
 opt.database = "phylodb"
 opt.storage = "misc_apis"
 opt.cog = false

@@ -4,9 +4,8 @@ require 'optparse'
 require 'ApisDB'
 require 'ostruct'
 
-opt = OpenStruct.new
+opt = ApisDB.loadOptions
 opt.storage = "misc_apis"
-opt.host = "mysql://apis:apis_user@mysql-lan-pro"
 opt.keep = false
 
 ARGV.options do |opts|

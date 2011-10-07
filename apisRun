@@ -6,14 +6,14 @@ require 'bio'
 require 'date'
 require 'ostruct'
 
-opt = OpenStruct.new
+
+opt = ApisDB.loadOptions
 
 opt.annotate = false
 opt.maxHits = 50
 opt.maxTree = 50
 opt.local = false
 opt.evalue = 1e-10
-opt.host = "mysql://apis:apis_user@mysql-lan-pro"
 opt.include = false
 opt.coverage = 0.50
 opt.minOrf = 50

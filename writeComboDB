@@ -2,10 +2,10 @@
 
 require 'optparse'
 require 'ostruct'
-require 'PhyloDB'
+require 'ApisDB'
 
-opt = OpenStruct.new
-opt.database = "mysql://access:access@mysql-lan-pro/phylodb"
+opt = ApisDB.loadOptions
+opt.database = opt.host + "/phylodb"
 opt.everything = false
 
 ARGV.options do |o|

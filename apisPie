@@ -6,12 +6,11 @@ require 'ApisDB'
 require 'gchart'
 require 'csv'
 
-opt = OpenStruct.new
+opt = ApisDB.loadOptions
 opt.all = false
 opt.exp = false
 opt.level = 2
 opt.storage = "misc_apis" 
-opt.host = "mysql://access:access@mysql-lan-pro"
 opt.num = false
 opt.prop = false
 

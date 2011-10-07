@@ -6,7 +6,7 @@ require 'ApisDB'
 require 'csv'
 require 'ostruct'
 
-opt = OpenStruct.new
+opt = ApisDB.loadOptions
 opt.target = false
 opt.contig = false
 opt.ingroup = false
@@ -15,7 +15,6 @@ opt.file = nil
 opt.name = false
 opt.exclude = false
 opt.must = false
-opt.host = "mysql://access:access@mysql-lan-pro"
 opt.storage = "misc_apis"
 opt.verbose = false
 

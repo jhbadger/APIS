@@ -1,4 +1,5 @@
 require 'mysql'
+require 'ostruct'
 
 class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
@@ -112,6 +113,14 @@ class ApisDB
     end
   end
   
+  # return annotation from phylodb
+  def fetchFunction(name)
+    query = "SELECT annotation FROM phylodb.proteins "
+    query += "WHERE proteins.name = '#{name.quote}'"
+    annotation, rest = get(query)
+    return annotation
+  end
+
   # create dataset if it doesn't exist
   def createDataset(dataset, owner, date, database, comments = "", group = "",
                     username = "", password = "")
@@ -236,6 +245,7 @@ class ApisDB
   # inserts phylogenomic annotation
   def createAnnotation(tree, seq_name, dataset)
     function = findClosestFunction(tree, seq_name)
+    printf("The function is %s\n", function)
     if (function)
       insert("annotation", [[seq_name, dataset, function.strip, "APIS"]])
     else
@@ -412,6 +422,29 @@ class ApisDB
     return taxon
   end
   
+  # load options from apis.conf in APIS directory or home directory
+  def self.loadOptions
+    files = [ENV["HOME"] + "/apis.conf", File.dirname(__FILE__)+"/apis.conf"]
+    file = nil
+    files.each do |f|
+      if File.exists?(f)
+        file = f
+        break
+      end
+    end
+    if (file.nil?)
+      STDERR << "No apis.conf found!\n"
+      exit(1)
+    else
+      opts = Hash.new
+      File.new(file).each do |line|
+        key, value = line.chomp.split(/ = |=/)
+        opts[key] = value 
+      end
+      return OpenStruct.new(opts)
+    end 
+  end
+
   # return hash of apis db objects (mysql or sqlite) depending on source string
   def  self.dbsFromSources(sources, user, password)
     dbs = Hash.new

@@ -7,7 +7,7 @@ require 'bio'
 require 'ostruct'
 require 'ZFile'
 
-opt = OpenStruct.new
+opt = ApisDB.loadOptions
 opt.sep = false
 opt.tax = false
 
@@ -201,7 +201,7 @@ ARGV.each do |gb|
       end
     end
     if (opt.tax)
-      db = ApisDB.new("mysql://access:access@mysql-lan-pro/phylodb")
+      db = ApisDB.new(opt.host + "/phylodb")
       taxonomy = buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)

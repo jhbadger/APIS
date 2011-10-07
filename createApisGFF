@@ -6,9 +6,7 @@ require 'ostruct'
 require 'csv'
 require 'ApisDB'
 
-opt = OpenStruct.new
-
-opt.host = "mysql://access:access@mysql-lan-pro"
+opt = ApisDB.loadOptions
 opt.limit = nil
 opt.storage = "misc_apis"
 opt.ann = false

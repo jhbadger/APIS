@@ -4,7 +4,7 @@ require 'ApisDB'
 require 'optparse'
 require 'ostruct'
 
-opt = OpenStruct.new
+opt = ApisDB.loadOptions
 opt.name = false
 opt.species = false
 opt.contig = false
@@ -14,7 +14,6 @@ opt.rna = false
 opt.molecule = false
 opt.file = false
 opt.form = false
-opt.host = "mysql://access:access@mysql-lan-pro"
 
 o = OptionParser.new
 o.banner << " id...id..."

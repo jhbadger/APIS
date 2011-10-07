@@ -5,8 +5,7 @@ require 'optparse'
 require 'ostruct'
 require 'csv'
 
-opt = OpenStruct.new
-opt.host = "mysql://access:access@mysql-lan-pro"
+opt = ApisDB.loadOptions
 opt.storage = "misc_apis"
 
 o = OptionParser.new
