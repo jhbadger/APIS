@@ -60,8 +60,6 @@ header.push("Dataset")
 header.push("Absolute Classification", "Majority Classification")
 print header.to_csv
 
-STDERR << "Loading Taxonomy...\n"
-tax = db.contigs_tax
 STDERR << "Counting Trees...\n"
 trees = db.query("SELECT seq_name, dataset, tree FROM tree WHERE dataset IN #{inList}")
 tnum = trees.num_rows
@@ -71,8 +69,8 @@ trees.each do |row|
   seq_name, dataset, tree = row
   begin
     tree = NewickTree.new(tree)
-    abscl = tree.createClassification(seq_name, tax, nil, false)
-    majcl = tree.createClassification(seq_name, tax, nil, true)
+    abscl = tree.createClassification(seq_name, db.tax, nil, false)
+    majcl = tree.createClassification(seq_name, db.tax, nil, true)
     print [seq_name, dataset, abscl, majcl].to_csv
     count += 1
     STDERR.printf("%4.2f%% done...\n", count*100.0/tnum) if (count % 1000 == 0)

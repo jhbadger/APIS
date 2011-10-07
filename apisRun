@@ -13,7 +13,7 @@ opt.maxHits = 50
 opt.maxTree = 50
 opt.local = false
 opt.evalue = 1e-10
-opt.host = "mysql-lan-pro"
+opt.host = "mysql://apis:apis_user@mysql-lan-pro"
 opt.include = false
 opt.coverage = 0.50
 opt.minOrf = 50
@@ -22,25 +22,18 @@ opt.erase = false
 opt.exclude = nil
 opt.gridSize = 1000
 opt.queue = "medium"
-opt.database = "phylodb"
 opt.rulemaj = false
 opt.storage = ""
 opt.clear = false
 opt.skipBlast = false
 opt.gblocks = false
 opt.timelogic = false
-opt.user = "apis"
-opt.password = "apis_user"
-
-$VERBOSE = nil
 
 o = OptionParser.new
 o.banner << " fasta [fasta...]"
 o.on("-a", "--annotate", 
      "annotate peptides phylogenomically") {opt.annotate = true}
 o.on("-c", "--clear", "remove old output") {opt.clear = true}
-o.on("-d ", "--database ", String, 
-     "query database (default #{opt.database})") {|d| opt.database = d}
 o.on("-e ", "--evalue ", Float, 
      "set BLASTP evalue (default #{opt.evalue})") {|e| opt.evalue = e}
 o.on("-f ", "--coverage ", Float, 
@@ -63,10 +56,6 @@ o.on("-r", "--ruleMajority", "use majority classification") {opt.ruleMaj = true}
 o.on("-s ", "--storage ", String, "storage database") {|s| opt.storage = s}
 o.on("-t ", "--maxTree ", Integer, 
      "max number of seqs in tree (default #{opt.maxTree})") {|t| opt.maxTree = t}
-o.on("-u ", "--user ", String, 
-     "db user (default #{opt.user})") {|t| opt.user = t}
-o.on("-w ", "--password ", String, 
-     "db password (default #{opt.password})") {|t| opt.password = t}
 o.on("-v ", "--timelogic ", 
      "use timelogic server:user:password (default #{opt.timelogic})") {|t| opt.timelogic = t}
 o.on("-x", "--skipBlast", 
@@ -94,32 +83,32 @@ if (opt.storage == "")
 end
 
 
-storage = MyDB.new(opt.host, opt.storage, opt.user, opt.password, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
-ARGV.each {|prot|
-  prot = asProt(prot, opt.minOrf)
+ARGV.each do |fasta|
+  prot = asProt(fasta, opt.minOrf)
   dataset, ext = File.basename(prot).gsub("apisRun_","").gsub("_input","").split(".")
-  storage.tax
-  storage.blastdb
-  database = ""
-  storage.deleteDataset("dataset = '#{dataset}'", true) if opt.clear
-  storage.query("SELECT updated from #{opt.database}.updated").each {|row|
-    database = opt.database + "_" + row[0]
-  }
-  storage.createDataset(dataset, ENV["USER"], Date.today.to_s, database)
-  storage.loadPeptides(prot, dataset, opt.include)
+  db.deleteDataset("dataset = '#{dataset}'", true) if opt.clear
   if (opt.timelogic)
-    runTimeLogic(prot, storage, dataset, opt)
+    database = db.timedb
+  else
+    database = db.blastdb
+  end
+  db.createDataset(dataset, ENV["USER"], Date.today.to_s, File.basename(database))
+  db.loadPeptides(prot, dataset, opt.include)
+  if (opt.timelogic)
+    runTimeLogic(prot, db, dataset, opt)
   end
   if (opt.local)
-    Bio::FlatFile.new(Bio::FastaFormat, File.new(prot)).each {|seq|
-      processPep(storage, seq, dataset, opt)
-    }
+    Bio::FlatFile.new(Bio::FastaFormat, File.new(prot)).each do |seq|
+      processPep(db, seq, dataset, opt)
+    end
   else
-    runGridApis(storage, dataset, opt)
+    runGridApis(db, dataset, opt)
   end
   if (opt.erase)
     File.unlink(prot)
   end
-}
-storage.close
+end
+
+db.close

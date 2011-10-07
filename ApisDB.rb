@@ -52,6 +52,33 @@ class ApisDB
     return get(query).first.to_i
   end
   
+  # returns true if exists one or more records matching condition
+  def exists?(condition)
+    num = count(condition)
+    if (num > 0)
+      return true
+    else
+      return false
+    end
+  end
+  
+  # Insert one or more records into table
+  def insert(table, records)
+    return if records.empty? || records.first.empty?
+    val = ""
+    records.each do |record|
+      val << "("
+      record.each do |value|
+        val << "'" << value.to_s.tr("'","") << "'"
+        val << ","
+      end
+      val.chop!
+      val << "),"
+    end
+    val.chop!
+    query("INSERT INTO #{table} VALUES #{val}")
+  end
+    
   # return first row data immediately from query 
   def get(sql)
     begin
@@ -66,22 +93,219 @@ class ApisDB
     end
   end
   
+  # return location of NCBI blast db for phylodb
+  def blastdb
+    return get("SELECT * from phylodb.apisdbs").first
+  end
+  
+  # return FASTA formated string of phylodb protein and length based on protein name
+  def fetchProt(name)
+    query = "SELECT proteins.name, annotation, species, "
+    query += "proteins.seq FROM phylodb.contigs, phylodb.proteins "
+    query += "WHERE contig_name = contigs.name AND proteins.name = '#{name.quote}'"
+    name, annotation, species, seq = get(query)
+    if (name.nil?)
+      return nil, nil
+    else
+      seq.gsub!("*","")
+      return seq.to_fasta("#{name} #{annotation} {#{species}}"), seq.length
+    end
+  end
+  
+  # create dataset if it doesn't exist
+  def createDataset(dataset, owner, date, database, comments = "", group = "",
+                    username = "", password = "")
+    if (!exists?("dataset WHERE dataset='#{dataset.quote}'"))
+      insert("dataset", [[dataset.quote, owner, date, database, 
+          comments, group, username, password]])
+    end
+  end
+  
+  # load peptides from file
+  def loadPeptides(prot, dataset, include = false)
+    if (!exists?("sequence WHERE dataset='#{dataset.quote}'") || include)
+      STDERR.printf("Loading Peptides from %s...\n", prot)
+    else
+      return
+    end
+    seqs = []
+    inputs = []
+    count = 0
+    Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(prot)).each do |seq|
+      id = seq.entry_id.gsub("(","").gsub(")","")
+      seqs.push([id, dataset, seq.seq, 0])
+      count += 1
+      name, rest = seq.definition.split(" ", 2)
+      if (!rest.nil? && rest.length > 3)
+        inputs.push([id, dataset, rest.strip, 'input'])
+      end
+      if (count % 10000 == 0)
+        insert("sequence", seqs)
+        insert("annotation", inputs)
+        seqs = []
+        inputs = []
+        STDERR.printf("Loaded sequence %d...\n", count)
+      end
+    end
+    if (seqs.size > 0)
+      insert("sequence", seqs)
+      insert("annotation", inputs)
+    end
+  end
+  
+  # return processed state of peptide
+  def processed?(seq_name, dataset)
+    query("SELECT processed FROM sequence WHERE seq_name = '#{seq_name}' AND dataset='#{dataset}'").each do |row|
+      return true if row[0] == "1"
+    end
+    return false
+  end
+
+  # set processed state for peptide
+  def setProcessed(seq_name, dataset)
+    query("UPDATE sequence SET processed=1 WHERE seq_name = '#{seq_name}' AND dataset='#{dataset}'") 
+  end
+
+  # unset processed state for peptide
+  def setUnProcessed(seq_name, dataset)
+    query("UPDATE sequence SET processed=0 WHERE seq_name = '#{seq_name}' AND dataset='#{dataset}'") 
+  end
+  
+  # inserts alignment, deleting it if it already exists
+  def createAlignment(seq_name, dataset, afa)
+    query = "DELETE FROM alignment WHERE seq_name = '#{seq_name.quote}' "
+    query += "AND dataset = '#{dataset.quote}'"
+    query(query)
+    lines = []
+    Bio::FlatFile.new(Bio::FastaFormat, File.new(afa)).each do |aseq|
+      lines.push([seq_name, dataset, aseq.entry_id, 
+                  aseq.definition.split(" ", 2).last, aseq.seq])
+    end
+    insert("alignment", lines)
+  end
+  
+  # return blast info for given seq_name + dataset and evalue
+  def fetchBlast(seq_name, dataset, evalue, maxTree, tax)
+    homologs = []
+    query("SELECT subject_name, subject_length, evalue FROM blast WHERE seq_name='#{seq_name}' AND dataset='#{dataset}' and evalue <= #{evalue} ORDER BY evalue").each do |row|
+      homologs.push(row[0]) if (homologs.size < maxTree && !homologs.include?(row[0]) && row[1].to_i < 2000)
+    end
+    return homologs
+  end
+  
+  # stores tree
+  def createTree(seq_name, dataset, tree)
+    if (exists?("tree WHERE seq_name='#{seq_name}' AND dataset = '#{dataset}'"))
+      query("UPDATE tree SET tree = '#{tree}' WHERE seq_name='#{seq_name}' AND dataset = '#{dataset}'")
+    else
+      insert("tree", [[seq_name, dataset, tree]])
+    end
+   end
+  
+   # interprets tree, creating classification
+   def createClassification(tree, name, dataset, exclude, ruleMaj)
+     cons = consensusTax(tree, name, ruleMaj)
+     lines = []
+     cons.each do |line|
+       lines.push(line) if (line.grep(/#{exclude}/).empty? || exclude.nil?)
+     end
+     first = lines[0]
+     first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
+     if (lines[1].nil?)
+       second = nil
+     else
+       second = lines[1]
+     end
+     mixed = false
+     classification = [name, dataset]
+     7.times do |level|
+       mixed = true if first[level] == "Mixed"
+       first[level] = "Mixed" if mixed
+       if (first[level] == "Mixed" || second.nil? || first[level] == second[level])
+         outgroup = 0
+       else
+         outgroup = 1
+       end
+       first[level] = "Undefined" if first[level].nil?
+       classification.push(first[level][0..45])
+       classification.push(outgroup)
+     end
+     return classification
+   end
+   
+  # creates phylogenomic annotation
+  def createAnnotation(tree, seq_name, dataset)
+    function  = findClosestFunction(tree, seq_name)
+    if (function)
+      return [seq_name, dataset, function.strip, "APIS"]
+    else
+      return nil
+    end
+  end
+
+  # returns array of consensus taxonomy at each relative level of tree
+  def consensusTax(tree, taxon, ruleMaj)
+    consensus = []
+    return  [] if (tree.relatives(taxon).nil?)
+    tree.relatives(taxon).each do |list|
+      counts = []
+      list.each do |relative|
+        acc, contig = relative.split("-")
+        contig, rest = contig.split("__")
+        next if (tax[contig].nil? || tax[contig]["species"].nil?)
+        groups = tax[contig]["taxonomy"].split(/; |;/)
+        groups.size.times do |i|
+          counts[i] = Hash.new if counts[i].nil?
+          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+          counts[i][groups[i]] += 1
+        end
+      end
+      if (ruleMaj)
+        consensus.push(counts.majority)
+      else
+        consensus.push(counts.absolute)
+      end
+    end
+    return consensus
+  end
+     
+  # delete dataset(s) matching condition and all associated records
+  def deleteDataset(condition, keepBlast = false)
+    query("SELECT dataset FROM dataset WHERE #{condition}").each do |row|
+      dataset, rest  = row
+      ["alignment", "annotation", "tree", "classification", "blast",
+        "sequence", "dataset"].each do |tbl|
+          next if (tbl == "blast" && keepBlast)
+          STDERR.printf("Deleting data in %s for %s...\n", tbl, dataset)
+          query("DELETE FROM #{tbl} WHERE dataset = '#{dataset.quote}'")
+      end
+    end
+  end
+  
   # close connection
   def close
     @db.close
   end
   
   # return taxonomy hash of contigs
-  def contigs_tax
-    taxdb = Hash.new
-    query("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
-      name, species, taxonomy = row
-      taxdb[species] = taxonomy.split(/; |;/)
-      taxdb[name] = taxdb[species]
+  def tax
+    if (!@tax)
+      STDERR.printf("Loading Taxonomy...\n")
+      @tax = Hash.new
+      query("SELECT name, taxonomy, form FROM phylodb.contigs").each do |row|
+        name, species, taxonomy, form = row
+        if (form == "Mitochondria")
+          taxonomy = "Bacteria; Proteobacteria; Alphaproteobacteria; Rickettsiales; Rickettsiaceae; Rickettsieae; Mitochondrion;"
+        elsif (form == "Plastid")  
+          taxonomy = "Bacteria; Cyanobacteria; Prochlorophytes; Prochlorococcaceae; Chloroplast;  Chloroplast;  Chloroplast;"
+        end
+        @tax[species] = taxonomy.split(/; |;/)
+        @tax[name] = @tax[species]
+      end
     end
-    return taxdb
+    return @tax
   end
-  
+    
   # return taxonomy array/string based on taxid
   def buildTaxFromTaxId(taxid, string = false, verbose = false)
     levels = ["kingdom", "phylum", "class", "order", "family", 

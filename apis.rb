@@ -1,30 +1,30 @@
 require 'Newick'
 require 'Phylogeny'
-require 'DBwrapper'
+require 'ApisDB'
 require 'ZFile'
 require 'SunGrid'
 
 $VERBOSE = false
 
 # run NCBI blast for a given sequence
-def runBlast(storage, seq, dataset, maxHits, evalue)
-  if (storage.count("blast where dataset = '#{dataset}' and seq_name = '#{seq.entry_id}'") == 0)
+def runBlast(db, seq, dataset, maxHits, evalue)
+  if (db.count("blast where dataset = '#{dataset}' and seq_name = '#{seq.entry_id}'") == 0)
     STDERR.printf("Currently creating blast for #{seq.entry_id}...\n")
     STDERR.flush
     seqFile = File.new(seq.entry_id + ".pep", "w")
-    seqFile.printf(">%s\n%s", seq.entry_id, seq.seq.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n"))
+    seqFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
     seqFile.close
-    blast = "blastall -p blastp -d #{storage.blastdb} -i '#{seq.entry_id+".pep"}' "
+    blast = "blastall -p blastp -d #{db.blastdb} -i '#{seq.entry_id+".pep"}' "
     blast += "-b#{maxHits} -v#{maxHits} -e#{evalue}"
-    storage.close
+    db.close
     system("#{blast} > '#{seq.entry_id}.blast' 2>/dev/null")
-    storage.connect
+    db.connect
     if (File.size(seq.entry_id + ".blast") > 300) # skip empty BLAST
       brows = []
-      Bio::Blast::Default::Report.open(seq.entry_id + ".blast", "r").each {|query|
-        query.each {|subject|
+      Bio::Blast::Default::Report.open(seq.entry_id + ".blast", "r").each do |query|
+        query.each do |subject|
           sname, sdef = subject.definition.split(" ",2)
-          subject.hsps.each {|hsp|
+          subject.hsps.each do |hsp|
             begin
               brows.push([seq.entry_id, dataset, sname, sdef, 
                           subject.target_len, hsp.query_from, 
@@ -35,36 +35,36 @@ def runBlast(storage, seq, dataset, maxHits, evalue)
               STDERR.printf("skipping HSP in %s...\n", seq.entry_id)
               STDERR.flush
             end
-          }
-        }
-      }
-      storage.insert("blast", brows)
-      storage.close
+          end
+        end
+      end
+      db.insert("blast", brows)
+      db.close
     end
   end
 end
 
 # run MUSCLE for a given list of homologs
-def runAlignment(storage, seq, dataset, blastHomologs, gblocks) 
+def runAlignment(db, seq, dataset, blastHomologs, gblocks) 
   homFile = File.new(seq.entry_id + ".hom", "w")
-  homFile.printf(">%s\n%s", seq.entry_id, seq.seq.gsub("*","").gsub(Regexp.new(".{1,60}"), "\\0\n"))
-  blastHomologs.each {|hom|
+  homFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
+  blastHomologs.each do |hom|
     next if hom == seq.entry_id
-    s, len = storage.fetchProtID(hom)
+    s, len = db.fetchProt(hom)
     homFile.print s if (!s.nil?)
-  }
+  end
   homFile.close
   STDERR.printf("Aligning %s...\n", seq.entry_id)
   STDERR.flush
-  storage.close
+  db.close
   system("muscle -quiet -in '#{seq.entry_id}.hom' -out '#{seq.entry_id}.out'")
   if (gblocks)
    len = gblocks(seq.entry_id + ".afa", seq.entry_id + ".out")
   else
     len = trimAlignment(seq.entry_id + ".afa", seq.entry_id + ".out")
   end
-  storage.connect
-  storage.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
+  db.connect
+  db.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
   if (!len.nil? && len > 0)
     return seq.entry_id + ".afa"
   else
@@ -72,7 +72,7 @@ def runAlignment(storage, seq, dataset, blastHomologs, gblocks)
   end
 end
 
-def runPhylogeny(storage, seq, dataset, alignFile)
+def runPhylogeny(db, seq, dataset, alignFile)
   treeFile = seq.entry_id + ".tree"
   begin 
     makeQuickNJTree(treeFile, alignFile, seq.entry_id, true)
@@ -84,16 +84,16 @@ def runPhylogeny(storage, seq, dataset, alignFile)
   return treeFile
 end
 
-def processTree(storage, seq, dataset, treeFile, alignFile, 
+def processTree(db, seq, dataset, treeFile, alignFile, 
                 annotate, exclude, ruleMaj)
   if (!treeFile.nil? && File.exist?(treeFile))
     begin
       id = seq.entry_id
       addSpecies(seq, treeFile, alignFile)
-      storage.createTree(id, dataset, File.read(treeFile))
+      db.createTree(id, dataset, File.read(treeFile))
       tree = NewickTree.fromFile(treeFile)
-      storage.createClassification(tree, id, dataset, exclude, ruleMaj)
-      storage.createAnnotation(tree, id, dataset) if annotate
+      db.createClassification(tree, id, dataset, exclude, ruleMaj)
+      db.createAnnotation(tree, id, dataset) if annotate
     rescue
       STDERR.printf("Problem %s handling %s. Skipping\n", $!, treeFile)
       STDERR.flush
@@ -105,12 +105,12 @@ end
 def coverage(seq, hit)
   return 0 if (hit.nil? || hit.query_end.nil?)
   blast_len = 0
-  hit.hsps.each {|hsp|
+  hit.hsps.each do |hsp|
     begin
       blast_len += hsp.align_len
     rescue
     end
-  }
+  end
   full_length = [hit.len, seq.length].max
   return blast_len * 1.0 / full_length
 end
@@ -197,50 +197,50 @@ end
 
 # deletes temporary files if they exist
 def deleteFiles(name, extensions)
-  extensions.each {|ext|
+  extensions.each do |ext|
     file = name + ext
     File.unlink(file) if File.exists?(file)
-  }
+  end
 end
 
 # pipeline for a single protein
-def processPep(storage, seq, dataset, opt)
+def processPep(db, seq, dataset, opt)
   seq.definition.gsub!("|","_")
   seq.entry_id.gsub!("(","")
   seq.entry_id.gsub!(")","")
-  if (!storage.processed?(seq.entry_id, dataset))
-    runBlast(storage, seq, dataset, opt.maxHits, opt.evalue) if (!opt.skipBlast)
-    blastHomologs = storage.fetchBlast(seq.entry_id, dataset, opt.evalue, 
-                                       opt.maxTree, storage.tax)
+  if (!db.processed?(seq.entry_id, dataset))
+    runBlast(db, seq, dataset, opt.maxHits, opt.evalue) if (!opt.skipBlast)
+    blastHomologs = db.fetchBlast(seq.entry_id, dataset, opt.evalue, 
+                                       opt.maxTree, db.tax)
     if (!blastHomologs.nil? && blastHomologs.size > 2)
-      alignFile = runAlignment(storage, seq, dataset, blastHomologs,
+      alignFile = runAlignment(db, seq, dataset, blastHomologs,
                                opt.gblocks) 
       if (!alignFile.nil?)
-        treeFile = runPhylogeny(storage, seq, dataset, alignFile)
-        processTree(storage, seq, dataset, treeFile, alignFile, 
+        treeFile = runPhylogeny(db, seq, dataset, alignFile)
+        processTree(db, seq, dataset, treeFile, alignFile, 
                     opt.annotate, opt.exclude, opt.ruleMaj)    
       end
     end
     deleteFiles(seq.entry_id, [".pep", ".tree", ".afa", ".hom", ".blast",
                               ".out"])
-    storage.setProcessed(seq.entry_id, dataset)
+    db.setProcessed(seq.entry_id, dataset)
   end
 end
 
 
 # runs blast job on TimeLogic Server
-def runTimeLogic(prot, storage, dataset, opt)
+def runTimeLogic(prot, db, dataset, opt)
   server, user, password = opt.timelogic.split(":")
   if (password.nil?)
     STDERR.printf("To use TimeLogic you must supply server:user:password (eg. tmlsrv2:cventer:darwin)\n")
     exit(1)
   end
-  if (storage.count("blast where dataset = '#{dataset}'") == 0)
+  if (db.count("blast where dataset = '#{dataset}'") == 0)
     STDERR.printf("Currently creating blast on Timelogic Server...\n")
     STDERR.flush
     command = "dc_run -parameters tera-blastp "
     command += "-query " + prot + " "
-    command += "-database " + File.basename(storage.blastdb, ".pep") + " "
+    command += "-database " + File.basename(db.blastdb, ".pep") + " "
     command += "-threshold significance=#{opt.evalue} "
     command += "-max_alignments #{opt.maxHits} "
     command += "-server #{server} -user #{user} -password #{password} "
@@ -259,7 +259,7 @@ def runTimeLogic(prot, storage, dataset, opt)
       count += 1 if (oldQuery != query)
       oldQuery = query
       if (count % 100 == 0)
-        storage.insert("blast", brows)
+        db.insert("blast", brows)
         brows = []
         STDERR.printf("Loading blast for sequence %d...\n", count)
       end
@@ -267,24 +267,22 @@ def runTimeLogic(prot, storage, dataset, opt)
         tlen.to_i, qstart.to_i, qend.to_i, tstart.to_i, tend.to_i, 
         ident.to_i, pos.to_i, score.to_i, sig.to_f]) if ident.to_i > 0
     end
-    storage.insert("blast", brows) if brows.size > 0
-    storage.close
+    db.insert("blast", brows) if brows.size > 0
+    db.close
     File.unlink(prot + ".blast")
   end
 end
 
 # split prot into chunks and run on grid
-def runGridApis(storage, dataset, opt)
+def runGridApis(db, dataset, opt)
   if (opt.project.nil?)
     STDERR.printf("A JCVI project number is needed for grid jobs\n")
     exit(1)
   end
   cmd = "apisRun "
   cmd += "-a " if opt.annotate
+  cmd += "-h #{opt.host} "
   cmd += "-t #{opt.maxTree} "
-  cmd += "-u #{opt.user} "
-  cmd += "-w #{opt.password} "
-  cmd += "-d #{opt.database} "
   cmd += "-g " if (opt.gblocks)
   cmd += "-s #{opt.storage} "
   cmd += "-x " if (opt.skipBlast || opt.timelogic)
@@ -296,7 +294,7 @@ def runGridApis(storage, dataset, opt)
   STDERR.printf("Splitting pep file for grid...\n")
   out = nil
   count = 0
-  storage.query("select seq_name, sequence from sequence where dataset = '#{dataset}' and processed = 0").each do |row|
+  db.query("select seq_name, sequence from sequence where dataset = '#{dataset}' and processed = 0").each do |row|
     seq = ">#{row[0]}\n#{row[1].gsub(Regexp.new(".{1,60}"), "\\0\n")}"
     if (count % opt.gridSize == 0)
       out.close if (!out.nil?)

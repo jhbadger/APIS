@@ -86,17 +86,14 @@ if (!datasets.empty?)
   end
 
   if (opt.tree || opt.relax)
-    STDERR << "Loading Taxonomy...\n"
-    taxdb = db.contigs_tax
-  else
-    taxdb = nil
+    db.tax # load taxonomy
   end
 
-  def summarizeClass(db, tax)
+  def summarizeClass(db)
     t = ""
     tid = nil
     goodRank = ""
-    tax.each do |rank|
+    db.tax.each do |rank|
       if (rank !="Undefined" && !rank.nil?)
         t += "; " if t != ""
         t += rank
@@ -106,7 +103,7 @@ if (!datasets.empty?)
     end
     t = "NO_TREE" if t == ""
     if (goodRank != "")
-      db.query("select taxon_id from phylodb.taxonomy where name = '#{goodRank.to_s.quote}' limit 1").each do |row|
+      db.query("SELECT taxon_id FROM phylodb.taxonomy WHERE name = '#{goodRank.to_s.quote}' LIMIT 1").each do |row|
         tid = row.first
       end
     end
@@ -174,7 +171,7 @@ if (!datasets.empty?)
           rtax = ""
           rtid = nil
         else
-          relax = newick.createClassification(row[0], taxdb, nil, true)
+          relax = newick.createClassification(row[0], db.tax, nil, true)
           rtax, rtid = summarizeClass(relax)
         end
         row[4..10] = [tax, tid, rtax, rtid]
@@ -206,3 +203,4 @@ if (!datasets.empty?)
   file.close if file != STDOUT
 end
 db.close
+

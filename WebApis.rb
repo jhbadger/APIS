@@ -1,5 +1,4 @@
 require 'sinatra'
-require 'bio'
 require 'fpdf'
 require 'gchart'
 require 'haml'
@@ -7,8 +6,6 @@ require 'Newick'
 require 'ApisDB'
 
 helpers do
-  
-  
   # return base url
   def base_uri
     return ENV["RACK_BASE_URI"]
@@ -314,7 +311,7 @@ get "/:db/:dataset/:seq/seq" do |db, dataset, seq|
   settings.dbs[db].query("SELECT annotation FROM annotation WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     ann = row[0] if (!row[0].nil?)
   end
-  s = Bio::Sequence::AA.new(seqdata).to_fasta(seq + " " + ann, 60)
+  s = seqdata.to_fasta(seq + " " + ann, 60)
   @main_content += s.gsub("\n","<BR>\n")
   settings.dbs[db].close
   haml :jcvi
@@ -328,7 +325,7 @@ get "/:db/:dataset/:seq/alignment" do |db, dataset, seq|
   @main_content = "<pre>\n"
   settings.dbs[db].query("SELECT alignment_name, alignment_desc, alignment_sequence FROM alignment WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
     name, desc, seq = row
-    @main_content += Bio::Sequence::AA.new(seq).to_fasta(name + " " + desc, 60)
+    @main_content += seq.to_fasta(name + " " + desc, 60)
   end
   @main_content += "</pre>\n"
   settings.dbs[db].close
