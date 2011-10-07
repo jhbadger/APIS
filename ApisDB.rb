@@ -78,7 +78,7 @@ class ApisDB
     val.chop!
     query("INSERT INTO #{table} VALUES #{val}")
   end
-    
+  
   # return first row data immediately from query 
   def get(sql)
     begin
@@ -202,7 +202,7 @@ class ApisDB
     end
    end
   
-   # interprets tree, creating classification
+   # interprets tree, creating classification and updating table
    def createClassification(tree, name, dataset, exclude, ruleMaj)
      cons = consensusTax(tree, name, ruleMaj)
      lines = []
@@ -230,14 +230,14 @@ class ApisDB
        classification.push(first[level][0..45])
        classification.push(outgroup)
      end
-     return classification
+     insert("classification",[classification])
    end
    
-  # creates phylogenomic annotation
+  # inserts phylogenomic annotation
   def createAnnotation(tree, seq_name, dataset)
-    function  = findClosestFunction(tree, seq_name)
+    function = findClosestFunction(tree, seq_name)
     if (function)
-      return [seq_name, dataset, function.strip, "APIS"]
+      insert("annotation", [[seq_name, dataset, function.strip, "APIS"]])
     else
       return nil
     end
@@ -252,8 +252,8 @@ class ApisDB
         match_id = acc + "-" + contig
         function = fetchFunction(match_id)
         if (!function.nil? && function.split(" ").size > 1 && 
-            function !~/unnamed/ && function !~/unknown/ && 
-            function !~/numExons/ && function !~/^\{/)
+          function !~/unnamed/ && function !~/unknown/ && 
+          function !~/numExons/ && function !~/^\{/)
           return function
         end
       end
@@ -312,7 +312,7 @@ class ApisDB
     if (!@tax)
       STDERR.printf("Loading Taxonomy...\n")
       @tax = Hash.new
-      query("SELECT name, taxonomy, form FROM phylodb.contigs").each do |row|
+      query("SELECT name, species, taxonomy, form FROM phylodb.contigs").each do |row|
         name, species, taxonomy, form = row
         if (form == "Mitochondria")
           taxonomy = "Bacteria; Proteobacteria; Alphaproteobacteria; Rickettsiales; Rickettsiaceae; Rickettsieae; Mitochondrion;"
