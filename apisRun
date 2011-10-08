@@ -7,7 +7,7 @@ require 'date'
 require 'ostruct'
 
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new 
 
 opt.annotate = false
 opt.maxHits = 50
@@ -28,6 +28,8 @@ opt.clear = false
 opt.skipBlast = false
 opt.gblocks = false
 opt.timelogic = false
+
+ApisDB.loadOptions(opt)
 
 o = OptionParser.new
 o.banner << " fasta [fasta...]"

@@ -96,7 +96,12 @@ class ApisDB
   
   # return location of NCBI blast db for phylodb
   def blastdb
-    return get("SELECT * from phylodb.apisdbs").first
+    return get("SELECT blastdb from phylodb.apisdbs").first
+  end
+  
+  # return location of timelogic db for phylodb
+  def timelogicdb
+    return get("SELECT timelogicdb from phylodb.apisdbs").first
   end
   
   # return FASTA formated string of phylodb protein and length based on protein name
@@ -423,7 +428,7 @@ class ApisDB
   end
   
   # load options from apis.conf in APIS directory or home directory
-  def self.loadOptions
+  def self.loadOptions(opts)
     files = [ENV["HOME"] + "/apis.conf", File.dirname(__FILE__)+"/apis.conf"]
     file = nil
     files.each do |f|
@@ -436,10 +441,10 @@ class ApisDB
       STDERR << "No apis.conf found!\n"
       exit(1)
     else
-      opts = Hash.new
+      opts = opts.to_hash
       File.new(file).each do |line|
         key, value = line.chomp.split(/ = |=/)
-        opts[key] = value 
+        opts[key.to_sym] = value 
       end
       return OpenStruct.new(opts)
     end 
@@ -564,5 +569,20 @@ class String
   # formats string as fasta record
   def to_fasta(header, len = 60)
     return ">#{header}\n#{self.gsub("*","").gsub(Regexp.new(".{1,#{len}}"), "\\0\n")}"
+  end
+end
+
+
+class OpenStruct
+  #implements the missing to_hash
+  def to_hash
+    h = @table
+    #handles nested structures
+    h.each do |k,v|
+      if v.class == OpenStruct
+        h[k] = v._to_hash
+      end
+    end
+    return h
   end
 end

@@ -11,7 +11,7 @@ require 'ostruct'
 require 'csv'
 require 'ApisDB'
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new
 
 opt.all = false
 opt.storage = "misc_apis"
@@ -24,6 +24,7 @@ opt.file = false
 opt.relax = false
 opt.limit = false
 opt.blast = false
+ApisDB.loadOptions(opt)
 
 ARGV.options do |o|
   o.banner << " [dataset .. dataset..]"
@@ -88,11 +89,11 @@ if (!datasets.empty?)
     db.tax # load taxonomy
   end
 
-  def summarizeClass(db)
+  def summarizeClass(db, tax)
     t = ""
     tid = nil
     goodRank = ""
-    db.tax.each do |rank|
+    tax.each do |rank|
       if (rank !="Undefined" && !rank.nil?)
         t += "; " if t != ""
         t += rank
@@ -171,7 +172,7 @@ if (!datasets.empty?)
           rtid = nil
         else
           relax = newick.createClassification(row[0], db.tax, nil, true)
-          rtax, rtid = summarizeClass(relax)
+          rtax, rtid = summarizeClass(db, relax)
         end
         row[4..10] = [tax, tid, rtax, rtid]
       else

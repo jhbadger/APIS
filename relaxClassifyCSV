@@ -6,11 +6,10 @@ require 'ostruct'
 require 'csv'
 require 'ApisDB'
 
-opt = ApisDB.loadOptions
-
+opt = OpenStruct.new
 opt.all = false
 opt.storage = "misc_apis"
-
+ApisDB.loadOptions(opt)
 
 ARGV.options do |o|
   o.banner << " [dataset .. dataset..]"

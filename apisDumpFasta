@@ -4,7 +4,7 @@ require 'optparse'
 require 'ApisDB'
 require 'ostruct'
 
-opt = ApisDB.loadoptions
+opt = OpenStruct.new
 
 opt.all = false
 opt.file = false
@@ -15,6 +15,7 @@ opt.tax = nil
 opt.ann = false
 opt.taxonomy = nil
 opt.exp = nil
+ApisDB.loadOptions(opt)
 
 ARGV.options do |o|
   o.banner << " [dataset...dataset]"

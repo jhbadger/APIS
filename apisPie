@@ -6,13 +6,14 @@ require 'ApisDB'
 require 'gchart'
 require 'csv'
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new
 opt.all = false
 opt.exp = false
 opt.level = 2
 opt.storage = "misc_apis" 
 opt.num = false
 opt.prop = false
+ApisDB.loadOptions(opt)
 
 ARGV.options do |opts|
   opts.banner << " [dataset .. dataset..]"

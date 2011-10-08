@@ -6,7 +6,7 @@ require 'ApisDB'
 require 'csv'
 require 'ostruct'
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new
 opt.target = false
 opt.contig = false
 opt.ingroup = false
@@ -17,6 +17,7 @@ opt.exclude = false
 opt.must = false
 opt.storage = "misc_apis"
 opt.verbose = false
+ApisDB.loadOptions(opt)
 
 o = OptionParser.new
 o.banner << " dataset"

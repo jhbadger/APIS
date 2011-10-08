@@ -6,15 +6,18 @@ require 'optparse'
 require 'bio'
 require 'ostruct'
 require 'ZFile'
+require 'ApisDB'
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new
 opt.sep = false
 opt.tax = false
+ApisDB.loadOptions(opt)
 
 ARGV.options do |opts|
   opts.banner << " gbk-file [..gbk-file...]"
   opts.on("-s", "--separate", 
           "output in separate files for each accession (#{opt.sep})") {|t| opt.sep = t}
+  opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
   opts.on("-t", "--taxonomy", 
           "use taxonomy from combodb database, not file (#{opt.tax})") {|t| opt.tax = t}
   begin

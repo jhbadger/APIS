@@ -4,9 +4,10 @@ require 'optparse'
 require 'ostruct'
 require 'ApisDB'
 
-opt = ApisDB.loadOptions
-opt.database = opt.host + "/phylodb"
+opt = OpenStruct.new
 opt.everything = false
+ApisDB.loadOptions(opt)
+opt.database = opt.host + "/phylodb"
 
 ARGV.options do |o|
   o.banner << " [contig-id...id...]"

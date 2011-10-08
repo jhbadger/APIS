@@ -5,8 +5,9 @@ require 'optparse'
 require 'ostruct'
 require 'csv'
 
-opt = ApisDB.loadOptions
+opt = OpenStruct.new
 opt.storage = "misc_apis"
+opt = ApisDB.loadOptions(opt)
 
 o = OptionParser.new
 o.banner << " csv"

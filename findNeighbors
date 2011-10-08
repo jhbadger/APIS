@@ -6,7 +6,7 @@ require 'ApisDB'
 require 'csv'
 require 'ostruct'
 
-opt = ApisDB.loadoptions
+opt = OpenStruct.new
 
 opt.all = false
 opt.database = "phylodb"
@@ -14,6 +14,7 @@ opt.storage = "misc_apis"
 opt.cog = false
 opt.exp = false
 opt.file = false
+opt = ApisDB.loadOptions(opt)
 
 o = OptionParser.new
 o.banner << " dataset [dataset...]"
