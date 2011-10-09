@@ -240,7 +240,7 @@ def runTimeLogic(prot, db, dataset, opt)
     STDERR.flush
     command = "dc_run -parameters tera-blastp "
     command += "-query " + prot + " "
-    command += "-database " + File.basename(db.blastdb, ".pep") + " "
+    command += "-database " + db.timelogicdb + " "
     command += "-threshold significance=#{opt.evalue} "
     command += "-max_alignments #{opt.maxHits} "
     command += "-server #{server} -user #{user} -password #{password} "
