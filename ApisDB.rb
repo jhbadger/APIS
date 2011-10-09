@@ -114,6 +114,7 @@ class ApisDB
       return nil, nil
     else
       seq.gsub!("*","")
+      name = name.clean
       return seq.to_fasta("#{name} #{annotation} {#{species}}"), seq.length
     end
   end
@@ -250,7 +251,6 @@ class ApisDB
   # inserts phylogenomic annotation
   def createAnnotation(tree, seq_name, dataset)
     function = findClosestFunction(tree, seq_name)
-    printf("The function is %s\n", function)
     if (function)
       insert("annotation", [[seq_name, dataset, function.strip, "APIS"]])
     else
@@ -335,7 +335,7 @@ class ApisDB
           taxonomy = "Bacteria; Cyanobacteria; Prochlorophytes; Prochlorococcaceae; Chloroplast;  Chloroplast;  Chloroplast;"
         end
         @tax[species] = taxonomy.split(/; |;/)
-        @tax[name] = @tax[species]
+        @tax[name.clean] = @tax[species]
       end
     end
     return @tax
@@ -569,6 +569,11 @@ class String
   # formats string as fasta record
   def to_fasta(header, len = 60)
     return ">#{header}\n#{self.gsub("*","").gsub(Regexp.new(".{1,#{len}}"), "\\0\n")}"
+  end
+
+  # gets rid of bad characters screwing up trees
+  def clean
+    return self.tr(":","_")
   end
 end
 

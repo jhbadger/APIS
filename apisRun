@@ -91,11 +91,7 @@ ARGV.each do |fasta|
   prot = asProt(fasta, opt.minOrf)
   dataset, ext = File.basename(prot).gsub("apisRun_","").gsub("_input","").split(".")
   db.deleteDataset("dataset = '#{dataset}'", true) if opt.clear
-  if (opt.timelogic)
-    database = db.timedb
-  else
-    database = db.blastdb
-  end
+  database = db.blastdb
   db.createDataset(dataset, ENV["USER"], Date.today.to_s, File.basename(database))
   db.loadPeptides(prot, dataset, opt.include)
   if (opt.timelogic)
