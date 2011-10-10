@@ -83,6 +83,8 @@ if (!datasets.empty?)
     header.push("Blast ID")
     header.push("Blast Annotation")
     header.push("Blast Evalue")
+    header.push("Blast Identity")
+    header.push("Blast Coverage")
   end
 
   if (opt.tree || opt.relax)
@@ -187,11 +189,14 @@ if (!datasets.empty?)
       end
       row.push(tree) if (opt.tree)
       if (opt.blast)
-        query = "SELECT subject_name, subject_description, evalue FROM blast WHERE dataset = '#{dataset.to_s.quote}' AND "
+        query = "SELECT subject_name, subject_description, evalue, identity, query_start, query_end FROM blast WHERE dataset = '#{dataset.to_s.quote}' AND "
         query += "seq_name = '#{row[0].to_s.quote}' ORDER BY evalue ASC LIMIT 1"
         subject_name, subject_description, evalue = nil, nil, nil
         blastHit = db.get(query)
         if (!blastHit.nil?)
+          cov = (1 + (blastHit.pop.to_i - blastHit.pop.to_i).abs) / row[2].to_f
+          blastHit.push(cov.round(2)) 
+          blastHit[3] = blastHit[3].to_f / 100.0
           row += blastHit
         end
       end
