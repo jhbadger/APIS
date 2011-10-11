@@ -145,11 +145,6 @@ if (!datasets.empty?)
       STDERR.printf("Loading BLAST hits...\n")
       query = "SELECT seq_name, MAX(score), evalue, subject_name, subject_description, identity, query_start, "
       query += "query_end from blast WHERE dataset = '#{dataset.quote}' GROUP BY seq_name"
-      header.push("Blast ID")
-      header.push("Blast Annotation")
-      header.push("Blast Evalue")
-      header.push("Blast Identity")
-      header.push("Blast Coverage")
       db.query(query).each do |row|
         name, score, evalue, subject, desc, identity, s, e = row
         blastHits[name] = [subject, desc, evalue.to_f, identity.to_i/100.0, 1 + (e.to_i - s.to_i).abs]
