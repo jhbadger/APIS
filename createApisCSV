@@ -18,7 +18,7 @@ opt.storage = "misc_apis"
 opt.tree = false
 opt.boot = false
 opt.cut = false
-opt.delim = false
+opt.delim = ","
 opt.exp = false
 opt.file = false
 opt.relax = false
@@ -31,7 +31,7 @@ ARGV.options do |o|
   o.on("-a", "--all", "include all datasets in database (#{opt.all})") {opt.all = true}
   o.on("-b", "--bootstrap", "include bootstrap value (#{opt.boot})") {|t| opt.boot = t}
   o.on("-c", "--cut", "separate file per dataset (#{opt.cut})") {opt.cut = true}
-  o.on("-d", "--delim-tab", "use tab delimiter (#{opt.delim})") {opt.delim = true}
+  o.on("-d", "--delim-tab", "use tab delimiter (default #{opt.delim})") {opt.delim = "\t"}
   o.on("-e ", "--expression ", String, "include datasets matching substring") {|t| opt.exp = t}
   o.on("-f ", "--file ", String, "only include ids from file") {|t| opt.file = t}
   o.on("-h ", "--host ", String, "database host (#{opt.host})") {|t| opt.host = t}
@@ -60,13 +60,6 @@ if (opt.all || opt.exp)
     dataset, rest = row
     ARGV.push(dataset.to_s.quote) if (!opt.exp || dataset =~/#{opt.exp}/)
   end
-end
-
-
-if (opt.delim)
-  opt.delim = "\t"
-else
-  opt.delim = ","
 end
 
 out = Hash.new
@@ -135,11 +128,11 @@ if (!datasets.empty?)
   file = STDOUT
   file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut)
   ext = ".csv"
-  ext = ".tab" if (opt.delim)
+  ext = ".tab" if (opt.delim == "\t")
   count = 0
-  STDERR << "Writing Spreadsheet...\n"
 
   datasets.each do |dataset|
+    blastHits = Hash.new
     db.close
     db.connect
     if (opt.cut)
@@ -147,6 +140,24 @@ if (!datasets.empty?)
       file = File.new(dataset + ext, "w")
       file << header.to_csv({:col_sep=>opt.delim})
     end
+    
+    if (opt.blast)
+      STDERR.printf("Loading BLAST hits...\n")
+      query = "SELECT seq_name, MAX(score), evalue, subject_name, subject_description, identity, query_start, "
+      query += "query_end from blast WHERE dataset = '#{dataset.quote}' GROUP BY seq_name"
+      header.push("Blast ID")
+      header.push("Blast Annotation")
+      header.push("Blast Evalue")
+      header.push("Blast Identity")
+      header.push("Blast Coverage")
+      db.query(query).each do |row|
+        name, score, evalue, subject, desc, identity, s, e = row
+        blastHits[name] = [subject, desc, evalue.to_f, identity.to_i/100.0, 1 + (e.to_i - s.to_i).abs]
+      end
+    end
+    
+    STDERR << "Writing Spreadsheet...\n"
+
     query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
     query += "kingdom, phylum, class, ord, family, genus, species, tree"
     query += " FROM sequence "
@@ -188,17 +199,10 @@ if (!datasets.empty?)
         end
       end
       row.push(tree) if (opt.tree)
-      if (opt.blast)
-        query = "SELECT subject_name, subject_description, evalue, identity, query_start, query_end FROM blast WHERE dataset = '#{dataset.to_s.quote}' AND "
-        query += "seq_name = '#{row[0].to_s.quote}' ORDER BY evalue ASC LIMIT 1"
-        subject_name, subject_description, evalue = nil, nil, nil
-        blastHit = db.get(query)
-        if (!blastHit.nil?)
-          cov = (1 + (blastHit.pop.to_i - blastHit.pop.to_i).abs) / row[2].to_f
-          blastHit.push(cov.round(2)) 
-          blastHit[3] = blastHit[3].to_f / 100.0
-          row += blastHit
-        end
+      if (opt.blast && blastHits[row[0]])
+        mlen = blastHits[row[0]].pop
+        blastHits[row[0]].push((mlen / row[2].to_f).round(2))
+        row += blastHits[row[0]]
       end
       file << row.to_csv({:col_sep=>opt.delim})
       count += 1
