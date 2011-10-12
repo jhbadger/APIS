@@ -168,7 +168,10 @@ if (!datasets.empty?)
     query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
     query += " LIMIT #{opt.limit}" if (opt.limit)
   
+    seen = Hash.new
     db.query(query).each do |row|
+      next if seen[row[0]]
+      seen[row[0]] = true
       tree = row.pop
       begin
         newick = NewickTree.new(tree) if (!tree.nil? && (opt.boot || opt.relax))
