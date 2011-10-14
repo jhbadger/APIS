@@ -24,6 +24,8 @@ opt.file = false
 opt.relax = false
 opt.limit = false
 opt.blast = false
+opt.exist = false
+
 ApisDB.loadOptions(opt)
 
 ARGV.options do |o|
@@ -40,6 +42,7 @@ ARGV.options do |o|
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
   o.on("-y", "--blast", "include top BLAST hit (#{opt.blast})") {opt.blast = true}
+  o.on("-x", "--exist", "exclude already existing files") {opt.exist = true}
   begin
     o.parse!
   rescue
@@ -137,6 +140,7 @@ if (!datasets.empty?)
     db.connect
     if (opt.cut)
       file.close if file != STDOUT
+      next if (File.exist?(dataset + ext) && opt.exist)
       file = File.new(dataset + ext, "w")
       file << header.to_csv({:col_sep=>opt.delim})
     end
