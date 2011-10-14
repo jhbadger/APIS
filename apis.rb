@@ -281,6 +281,7 @@ def runGridApis(db, dataset, opt)
   end
   cmd = "apisRun "
   cmd += "-a " if opt.annotate
+  cmd += "-d #{opt.database} "
   cmd += "-h #{opt.host} "
   cmd += "-t #{opt.maxTree} "
   cmd += "-g " if (opt.gblocks)
