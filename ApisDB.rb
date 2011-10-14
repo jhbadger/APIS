@@ -3,10 +3,12 @@ require 'ostruct'
 
 class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
-  def initialize(uri)
+  attr_reader :proteindb
+  def initialize(uri, proteindb)
     token = "[a-z|0-9|A-Z|_|-]+"
     if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})*/)
       @driver, @user, @password, @server, @database = $1, $2, $3, $4, $5
+      @proteindb = proteindb
       connect
     else
       STDERR << "can't parse " << uri << "\n"
@@ -26,7 +28,7 @@ class ApisDB
           STDERR << "only mysql right now -- can't parse " << uri << "\n"
           exit(1)
         end
-      rescue
+      rescue Exception => e
         sleep 0.2
       end
     end
@@ -94,20 +96,20 @@ class ApisDB
     end
   end
   
-  # return location of NCBI blast db for phylodb
+  # return location of NCBI blast db for protein database
   def blastdb
-    return get("SELECT blastdb from phylodb.apisdbs").first
+    return get("SELECT blastdb from #{@proteindb}.apisdbs").first
   end
   
-  # return location of timelogic db for phylodb
+  # return location of timelogic db for protein database
   def timelogicdb
-    return get("SELECT timelogicdb from phylodb.apisdbs").first
+    return get("SELECT timelogicdb from #{@proteindb}.apisdbs").first
   end
   
-  # return FASTA formated string of phylodb protein and length based on protein name
+  # return FASTA formated string of protein database protein and length based on protein name
   def fetchProt(name)
     query = "SELECT proteins.name, annotation, species, "
-    query += "proteins.seq FROM phylodb.contigs, phylodb.proteins "
+    query += "proteins.seq FROM #{@proteindb}.contigs, #{@proteindb}.proteins "
     query += "WHERE contig_name = contigs.name AND proteins.name = '#{name.quote}'"
     name, annotation, species, seq = get(query)
     if (name.nil?)
@@ -119,9 +121,9 @@ class ApisDB
     end
   end
   
-  # return annotation from phylodb
+  # return annotation from protein database
   def fetchFunction(name)
-    query = "SELECT annotation FROM phylodb.proteins "
+    query = "SELECT annotation FROM #{@proteindb}.proteins "
     query += "WHERE proteins.name = '#{name.quote}'"
     annotation, rest = get(query)
     return annotation
@@ -327,7 +329,7 @@ class ApisDB
     if (!@tax)
       STDERR.printf("Loading Taxonomy...\n")
       @tax = Hash.new
-      query("SELECT name, species, taxonomy, form FROM phylodb.contigs").each do |row|
+      query("SELECT name, species, taxonomy, form FROM #{@proteindb}.contigs").each do |row|
         name, species, taxonomy, form = row
         if (form == "Mitochondria")
           taxonomy = "Bacteria; Proteobacteria; Alphaproteobacteria; Rickettsiales; Rickettsiaceae; Rickettsieae; Mitochondrion;"
@@ -350,7 +352,7 @@ class ApisDB
     rank = ""
     tax = [""]*7
     while (name != "root")
-      query = "select parent_id, name, rank from phylodb.taxonomy WHERE tax_id = #{taxid}"
+      query = "select parent_id, name, rank from #{@proteindb}.taxonomy WHERE tax_id = #{taxid}"
       pid, name, rank = get(query)
       STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) if verbose
       return nil if pid.nil?
@@ -454,11 +456,11 @@ class ApisDB
   def  self.dbsFromSources(sources, user, password)
     dbs = Hash.new
     sources.each do |source|
-      db = ApisDB.new("mysql://#{user}:#{password}@#{source}/")
+      db = ApisDB.new("mysql://#{user}:#{password}@#{source}/", "")
       db.query("SHOW DATABASES").each do |row|
         dbname = row[0]
         if (dbname =~/_apis/ && !dbs[dbname])
-          dbs[dbname] = ApisDB.new("mysql://#{user}:#{password}@#{source}/#{dbname}")
+          dbs[dbname] = ApisDB.new("mysql://#{user}:#{password}@#{source}/#{dbname}", "")
           dbs[dbname].close
         end
       end
@@ -574,6 +576,11 @@ class String
   # gets rid of bad characters screwing up trees
   def clean
     return self.tr(":","_")
+  end
+  
+  # split string into id + contig
+  def splitId
+    return self[0..self.rindex("-").to_i-1],self[1 + self.rindex("-").to_i..self.length]
   end
 end
 

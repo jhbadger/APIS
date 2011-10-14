@@ -14,11 +14,16 @@ opt.rna = false
 opt.molecule = false
 opt.file = false
 opt.form = false
+opt.everything = false
 ApisDB.loadOptions(opt)
 
 o = OptionParser.new
 o.banner << " id...id..."
 o.on("-c", "--contig", "use contig as search id") {opt.contig = true}
+o.on("-d ", "--database ", String, 
+     "protein database to use (default #{opt.database})") {|d| opt.database = d}
+o.on("-e", "--everything", 
+     "return for all contigs") {opt.everything=true; ARGV.push("everything")}     
 o.on("-s", "--species", "use species as search id") {opt.species = true}  
 o.on("-n", "--name", "use (exact) sequence name as search id") {opt.name = true}  
 o.on("-g", "--form", "use contig form as search id") {opt.form = true}
@@ -38,7 +43,7 @@ rescue
   STDERR << o
   exit(1)
 end
-if (ARGV.size <  1 && !opt.file)
+if (ARGV.size <  1 && !opt.file && !opt.everything)
   STDERR << o
   exit(1)
 end
@@ -53,7 +58,7 @@ else
 end
 
 
-db = ApisDB.new(opt.host + "/phylodb")
+db = ApisDB.new(opt.host + "/" + opt.database, opt.database)
 
 inList = "("
 ids.each do |id|
@@ -63,6 +68,10 @@ ids.each do |id|
     query = "SELECT name FROM contigs WHERE taxonomy LIKE '%#{id.quote}%'"
   elsif (opt.form)
     query = "SELECT name FROM contigs WHERE form LIKE '%#{id.quote}%'"
+  elsif (opt.contig)
+    query = "SELECT name FROM contigs WHERE name LIKE '%#{id.quote}%'"
+  elsif (opt.everything)
+    query = "SELECT name FROM contigs"
   end
   if (!opt.name)
     db.query(query).each do |row|

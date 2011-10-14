@@ -22,6 +22,8 @@ ApisDB.loadOptions(opt)
 o = OptionParser.new
 o.banner << " dataset"
 o.on("-c", "--contig", "don't show contig (false)") {opt.contig = true}
+o.on("-d ", "--database ", String, 
+     "protein database to use (default #{opt.database})") {|d| opt.database = d}
 o.on("-e ", "--exclude ", String, "exclude from target") {|e| opt.exclude = e}
 o.on("-h ", "--host ", String, 
      "database host (default #{opt.host})") {|h| opt.host = h}
@@ -89,12 +91,12 @@ def summarizeTax(consense)
   return summary
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
 
 species = Hash.new
 taxonomy = Hash.new
 STDERR << "Loading Contig Info...\n"
-db.query("SELECT name, species, taxonomy FROM phylodb.contigs").each do |row|
+db.query("SELECT name, species, taxonomy FROM #{opt.database}.contigs").each do |row|
   name, sp, tx = row
   species[name] = sp
   taxonomy[name] = tx

@@ -14,6 +14,8 @@ ApisDB.loadOptions(opt)
 ARGV.options do |o|
   o.banner << " [dataset .. dataset..]"
   o.on("-a", "--all", "include all datasets in database") {|t| opt.all = true}
+  o.on("-d ", "--database ", String, 
+       "protein database to use (default #{opt.database})") {|d| opt.database = d}
   o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   begin
@@ -29,7 +31,7 @@ ARGV.options do |o|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
 
 inList = "("
 if (opt.all)

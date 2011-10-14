@@ -15,6 +15,8 @@ ApisDB.loadOptions(opt)
 
 ARGV.options do |opts|
   opts.banner << " gbk-file [..gbk-file...]"
+  opts.on("-d ", "--database ", String, 
+       "protein database to use (default #{opt.database})") {|d| opt.database = d}
   opts.on("-s", "--separate", 
           "output in separate files for each accession (#{opt.sep})") {|t| opt.sep = t}
   opts.on("-h ", "--host ", String, "database host (default #{opt.host})") {|t| opt.host = t}
@@ -204,7 +206,7 @@ ARGV.each do |gb|
       end
     end
     if (opt.tax)
-      db = ApisDB.new(opt.host + "/phylodb")
+      db = ApisDB.new(opt.host + "/" + opt.database, opt.database)
       taxonomy = buildTaxFromTaxId(taxonid, true)
       if (taxonomy.nil?)
         STDERR.printf("No info for %d\n", taxonid)

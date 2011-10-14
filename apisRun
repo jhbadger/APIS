@@ -36,6 +36,8 @@ o.banner << " fasta [fasta...]"
 o.on("-a", "--annotate", 
      "annotate peptides phylogenomically") {opt.annotate = true}
 o.on("-c", "--clear", "remove old output") {opt.clear = true}
+o.on("-d ", "--database ", String, 
+     "protein database to use (default #{opt.database})") {|d| opt.database = d}
 o.on("-e ", "--evalue ", Float, 
      "set BLASTP evalue (default #{opt.evalue})") {|e| opt.evalue = e}
 o.on("-f ", "--coverage ", Float, 
@@ -85,7 +87,14 @@ if (opt.storage == "")
 end
 
 
-db = ApisDB.new(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+
+begin
+  db.count(opt.database + ".apisdbs")
+rescue
+  STDERR.printf("There seems to be no protein database called %s. Aborting\n", opt.database)
+  exit(1)
+end
 
 ARGV.each do |fasta|
   prot = asProt(fasta, opt.minOrf)

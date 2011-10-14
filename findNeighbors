@@ -9,7 +9,6 @@ require 'ostruct'
 opt = OpenStruct.new
 
 opt.all = false
-opt.database = "phylodb"
 opt.storage = "misc_apis"
 opt.cog = false
 opt.exp = false
@@ -41,7 +40,7 @@ if (ARGV.size < 1 && (!opt.all && !opt.exp))
 end
 
 
-db = ApisDB.new(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
 
 header = ["Sequence", "Dataset", "Kingdom", "Neighbor", "Bootstrap", "Distance"]
 header += ["COG", "COG Definition"] if opt.cog

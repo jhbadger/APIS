@@ -27,7 +27,7 @@ end
 
 csv, rest = ARGV
 
-db = ApisDB.new(opt.host + "/" + opt.storage)
+db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
 
 datasets = []
 db.query("SELECT dataset FROM dataset").each do |row|
