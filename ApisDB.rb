@@ -3,12 +3,10 @@ require 'ostruct'
 
 class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
-  attr_reader :proteindb
-  def initialize(uri, proteindb)
+  def initialize(uri)
     token = "[a-z|0-9|A-Z|_|-]+"
     if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})*/)
       @driver, @user, @password, @server, @database = $1, $2, $3, $4, $5
-      @proteindb = proteindb
       connect
     else
       STDERR << "can't parse " << uri << "\n"
@@ -96,40 +94,9 @@ class ApisDB
     end
   end
   
-  # return location of NCBI blast db for protein database
-  def blastdb
-    return get("SELECT blastdb from #{@proteindb}.apisdbs").first
-  end
   
-  # return location of timelogic db for protein database
-  def timelogicdb
-    return get("SELECT timelogicdb from #{@proteindb}.apisdbs").first
-  end
-  
-  # return FASTA formated string of protein database protein and length based on protein name
-  def fetchProt(name)
-    query = "SELECT proteins.name, annotation, species, "
-    query += "proteins.seq FROM #{@proteindb}.contigs, #{@proteindb}.proteins "
-    query += "WHERE contig_name = contigs.name AND proteins.name = '#{name.quote}'"
-    name, annotation, species, seq = get(query)
-    if (name.nil?)
-      return nil, nil
-    else
-      seq.gsub!("*","")
-      name = name.clean
-      return seq.to_fasta("#{name} #{annotation} {#{species}}"), seq.length
-    end
-  end
-  
-  # return annotation from protein database
-  def fetchFunction(name)
-    query = "SELECT annotation FROM #{@proteindb}.proteins "
-    query += "WHERE proteins.name = '#{name.quote}'"
-    annotation, rest = get(query)
-    return annotation
-  end
-
-  # create dataset if it doesn't exist
+ 
+ # create dataset if it doesn't exist
   def createDataset(dataset, owner, date, database, comments = "", group = "",
                     username = "", password = "")
     if (!exists?("dataset WHERE dataset='#{dataset.quote}'"))
@@ -154,6 +121,7 @@ class ApisDB
       count += 1
       name, rest = seq.definition.split(" ", 2)
       if (!rest.nil? && rest.length > 3)
+        rest = rest[0,1000] if (rest.length > 1000)
         inputs.push([id, dataset, rest.strip, 'input'])
       end
       if (count % 10000 == 0)
@@ -202,10 +170,10 @@ class ApisDB
   end
   
   # return blast info for given seq_name + dataset and evalue
-  def fetchBlast(seq_name, dataset, evalue, maxTree, tax)
+  def fetchBlast(seq_name, dataset, evalue, maxTree)
     homologs = []
-    query("SELECT subject_name, subject_length, evalue FROM blast WHERE seq_name='#{seq_name}' AND dataset='#{dataset}' and evalue <= #{evalue} ORDER BY evalue").each do |row|
-      homologs.push(row[0]) if (homologs.size < maxTree && !homologs.include?(row[0]) && row[1].to_i < 2000)
+    query("SELECT subject_name, subject_length, evalue, identity FROM blast WHERE seq_name='#{seq_name}' AND dataset='#{dataset}' and evalue <= #{evalue} ORDER BY evalue").each do |row|
+      homologs.push(row[0]) if (homologs.size < maxTree && !homologs.include?(row[0]) && row[1].to_i < 2000 && row.last.to_i < 100)
     end
     return homologs
   end
@@ -251,8 +219,8 @@ class ApisDB
    end
    
   # inserts phylogenomic annotation
-  def createAnnotation(tree, seq_name, dataset)
-    function = findClosestFunction(tree, seq_name)
+  def createAnnotation(tree, seq_name, dataset, functHash)
+    function = findClosestFunction(tree, seq_name, functHash)
     if (function)
       insert("annotation", [[seq_name, dataset, function.strip, "APIS"]])
     else
@@ -261,22 +229,72 @@ class ApisDB
   end
 
   # return the annotation of the closest sequence to id on tree 
-  def findClosestFunction(tree, id)
+  def findClosestFunction(tree, id, functHash)
     begin
       tree.relatives(id).each do |match|
-        acc, contig = match.first.split("-")
-        contig, rest = contig.split("__")
-        match_id = acc + "-" + contig
-        function = fetchFunction(match_id)
-        if (!function.nil? && function.split(" ").size > 1 && 
-          function !~/unnamed/ && function !~/unknown/ && 
-          function !~/numExons/ && function !~/^\{/)
-          return function
+        match.each do |seq|
+          id, sp = seq.split("__", 2)
+          function = functHash[id].split(";").first
+          if (!function.nil? && 
+            function !~/unnamed/ && function !~/unknown/ && 
+            function !~/numExons/ && function !~/^\{/)
+              return function
+          end
         end
       end
       return false
     rescue
       return false
+    end
+  end
+
+  # loads phylodb taxonomy 
+  def loadTaxonomy(proteindb)
+    if !@taxa
+      @nums = Hash.new
+      @taxa = Hash.new
+      @ranks = Hash.new
+      @parents = Hash.new
+      @fullTax = Hash.new
+      tax = Dir.glob(File.dirname(proteindb) + "/usedTaxa*").first
+      if (tax.nil?)
+        STDERR << "Can't find usedTaxa file in " << 
+          File.dirname(proteindb) << "\n"
+        exit(1)
+      else
+        File.new(tax).each do |line|
+          num, name, parent, rank = line.chomp.split("\t")
+          num = num.to_i
+          parent = parent.to_i
+          @taxa[num] = name.gsub(" ", "_")
+          @nums[@taxa[num]] = num
+          @ranks[num] = rank
+          @parents[num] = parent
+        end
+      end
+    end
+    return @taxa
+  end
+  
+  # returns full taxonomy string for taxonid
+  def taxonomyString(taxid)
+    goodRanks = ["superkingdom","kingdom", "phylum", "class", "order", 
+      "family", "genus", "species"]
+    if (@taxa[taxid])
+      s = ""
+      while (@parents[taxid] > 1)
+        if (goodRanks.include?(@ranks[taxid]))
+          if (s == "")
+            s = @taxa[taxid]
+          else
+            s = @taxa[taxid] + "; " + s
+          end
+        end
+        taxid = @parents[taxid]
+      end
+      return s
+    else
+      return (["unknown"]*7).join("; ")
     end
   end
 
@@ -287,9 +305,11 @@ class ApisDB
     tree.relatives(taxon).each do |list|
       counts = []
       list.each do |relative|
-        acc, contig = relative.split("-")
-        contig, rest = contig.split("__")
-        groups = tax[contig]
+        seqid, sp = relative.split("__")
+        if(!@fullTax[sp])
+          @fullTax[sp] = taxonomyString(@nums[sp]).gsub("_"," ").split("; ")
+        end
+        groups = @fullTax[sp]
         next if (groups.nil?)
         groups.size.times do |i|
           counts[i] = Hash.new if counts[i].nil?
@@ -324,63 +344,7 @@ class ApisDB
     @db.close
   end
   
-  # return taxonomy hash of contigs
-  def tax
-    if (!@tax)
-      STDERR.printf("Loading Taxonomy...\n")
-      @tax = Hash.new
-      query("SELECT name, species, taxonomy, form FROM #{@proteindb}.contigs").each do |row|
-        name, species, taxonomy, form = row
-        if (form == "Mitochondria")
-          taxonomy = "Bacteria; Proteobacteria; Alphaproteobacteria; Rickettsiales; Rickettsiaceae; Rickettsieae; Mitochondrion;"
-        elsif (form == "Plastid")  
-          taxonomy = "Bacteria; Cyanobacteria; Prochlorophytes; Prochlorococcaceae; Chloroplast;  Chloroplast;  Chloroplast;"
-        end
-        @tax[species] = taxonomy.split(/; |;/)
-        @tax[name.clean] = @tax[species]
-      end
-    end
-    return @tax
-  end
-    
-  # return taxonomy array/string based on taxid
-  def buildTaxFromTaxId(taxid, string = false, verbose = false)
-    levels = ["kingdom", "phylum", "class", "order", "family", 
-              "genus", "species"]
-    name = ""
-    pid = ""
-    rank = ""
-    tax = [""]*7
-    while (name != "root")
-      query = "select parent_id, name, rank from #{@proteindb}.taxonomy WHERE tax_id = #{taxid}"
-      pid, name, rank = get(query)
-      STDERR.printf("%d\t%d\t%s\t%s\n", taxid, pid, name, rank) if verbose
-      return nil if pid.nil?
-      pos = levels.index(rank)
-      if (pos.nil?)
-        pos = 0 if name == "Viruses" || name == "Viroids"
-        pos = 1 if name =~ /viruses/
-      end
-      tax[pos] = name.tr(",()[]'\"/","") if (pos)
-      taxid = pid
-    end
-    6.step(0, -1) do |i|
-      if (tax[i] == "")
-        tax[i] = tax[i + 1].split(" (").first + " (" + levels[i] + ")"
-      end
-    end
-    if (string)
-      tline = ""
-      tax.each {|lev|
-        tline += lev
-        tline += "; " if lev != tax.last
-      }
-      return tline
-    else
-      return tax
-    end
-  end
-  
+ 
   # return taxonomic grouping used in the GOS analysis
   def gos_taxonomy(kingdom, phylum, cl, ord, family, genus, species)
     if genus =~/Pelagibacter|SAR11/

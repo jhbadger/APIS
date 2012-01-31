@@ -30,7 +30,7 @@ def trimAlignment(trimFile, alignFile, maxGapFract = 0.5, exclude = nil)
   if (File.exist?(alignFile) && !File.exist?(trimFile))
     seqs = []
     badCols = []
-    len = nil
+    len = 0
     Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
       seq.data.tr!("\n","")
       seqs.push(seq)
@@ -51,12 +51,13 @@ def trimAlignment(trimFile, alignFile, maxGapFract = 0.5, exclude = nil)
 	      seq.data[col] = "!"
       end
       seq.data.tr!("!","")
-      len = seq.data.length if len.nil?
+      len = seq.data.length
       out.print Bio::Sequence.auto(seq.data).to_fasta(seq.definition, 60)
     end
     out.close
-    return len
+    return len if len > 0
   end
+  return nil
 end
 
 # back aligns dna to pep alignment and puts it in dnaAlign
@@ -489,17 +490,12 @@ def classifyNeighbors(neighborFile, combine = nil, exclude = nil)
   return consensus
 end 
 
-def addSpecies(qseq, treeFile, alignFile)
+def addSpecies(qseq, treeFile, spHash)
   species = Hash.new
   tree = NewickTree.fromFile(treeFile)
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
-    next if qseq.definition == seq.definition
-    gi, contig = seq.entry_id.split("-", 2)
-    if (seq.definition =~/\{([^\}]*)/)
-      sp = $1.tr('()[]: ",', "_")
-    end
-    species[seq.entry_id] = seq.entry_id + "__#{sp}" if (!sp.nil?)
-  }
+  spHash.keys.each do |key|
+    species[key] =  key + "__#{spHash[key].tr("():,","")}"
+  end
   tree.unAlias(species)
   tree.write(treeFile)
 end

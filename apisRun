@@ -37,7 +37,7 @@ o.on("-a", "--annotate",
      "annotate peptides phylogenomically") {opt.annotate = true}
 o.on("-c", "--clear", "remove old output") {opt.clear = true}
 o.on("-d ", "--database ", String, 
-     "protein database to use (default #{opt.database})") {|d| opt.database = d}
+     "protein database to use (default #{opt.proteindb})") {|d| opt.proteindb = d}
 o.on("-e ", "--evalue ", Float, 
      "set BLASTP evalue (default #{opt.evalue})") {|e| opt.evalue = e}
 o.on("-f ", "--coverage ", Float, 
@@ -87,21 +87,14 @@ if (opt.storage == "")
 end
 
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
-
-begin
-  db.count(opt.database + ".apisdbs")
-rescue
-  STDERR.printf("There seems to be no protein database called %s. Aborting\n", opt.database)
-  exit(1)
-end
+db = ApisDB.new(opt.host + "/" + opt.storage)
+db.loadTaxonomy(opt.proteindb)
 
 ARGV.each do |fasta|
   prot = asProt(fasta, opt.minOrf)
   dataset, ext = File.basename(prot).gsub("apisRun_","").gsub("_input","").split(".")
   db.deleteDataset("dataset = '#{dataset}'", true) if opt.clear
-  database = db.blastdb
-  db.createDataset(dataset, ENV["USER"], Date.today.to_s, File.basename(database))
+  db.createDataset(dataset, ENV["USER"], Date.today.to_s, File.basename(opt.proteindb, ".pep"))
   db.loadPeptides(prot, dataset, opt.include)
   if (opt.timelogic)
     runTimeLogic(prot, db, dataset, opt)

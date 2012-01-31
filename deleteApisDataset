@@ -27,7 +27,7 @@ ARGV.options do |opts|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 ARGV.each do |dataset|
   db.deleteDataset("dataset = '#{dataset.quote}'", opt.keep)

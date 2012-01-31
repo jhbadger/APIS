@@ -7,14 +7,14 @@ require 'SunGrid'
 $VERBOSE = false
 
 # run NCBI blast for a given sequence
-def runBlast(db, seq, dataset, maxHits, evalue)
+def runBlast(db, seq, dataset, maxHits, evalue, proteindb)
   if (db.count("blast where dataset = '#{dataset}' and seq_name = '#{seq.entry_id}'") == 0)
     STDERR.printf("Currently creating blast for #{seq.entry_id}...\n")
     STDERR.flush
     seqFile = File.new(seq.entry_id + ".pep", "w")
     seqFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
     seqFile.close
-    blast = "blastall -p blastp -d #{db.blastdb} -i '#{seq.entry_id+".pep"}' "
+    blast = "blastall -p blastp -d #{proteindb} -i '#{seq.entry_id+".pep"}' "
     blast += "-b#{maxHits} -v#{maxHits} -e#{evalue}"
     db.close
     system("#{blast} > '#{seq.entry_id}.blast' 2>/dev/null")
@@ -24,6 +24,7 @@ def runBlast(db, seq, dataset, maxHits, evalue)
       Bio::Blast::Default::Report.open(seq.entry_id + ".blast", "r").each do |query|
         query.each do |subject|
           sname, sdef = subject.definition.split(" ",2)
+          sdef = sdef[0,1000] if (sdef.length > 1000)
           subject.hsps.each do |hsp|
             begin
               brows.push([seq.entry_id, dataset, sname, sdef, 
@@ -45,19 +46,31 @@ def runBlast(db, seq, dataset, maxHits, evalue)
 end
 
 # run MUSCLE for a given list of homologs
-def runAlignment(db, seq, dataset, blastHomologs, gblocks) 
-  homFile = File.new(seq.entry_id + ".hom", "w")
+def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
+  hom = seq.entry_id + ".hom"
+  homFile = File.new(hom, "w")
+  spHash = Hash.new
+  functHash = Hash.new
+  
   homFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
-  blastHomologs.each do |hom|
-    next if hom == seq.entry_id
-    s, len = db.fetchProt(hom)
-    homFile.print s if (!s.nil?)
+  homs = blastHomologs.join(",")
+  `fastacmd -d #{proteindb} -s "#{homs}"`.split(">").each do |seq|
+    next if seq == ""
+    header, seq = seq.split("\n", 2)
+    seqid, ann = header.split(" ")
+    seqid.gsub!("lcl|", "")
+    ann = ann.split("||").first
+    ann, sp = ann.split("::")
+    spHash[seqid] = sp
+    functHash[seqid] = ann
+    homFile.print ">" + seqid + "\n"
+    homFile.print seq.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
   end
   homFile.close
   STDERR.printf("Aligning %s...\n", seq.entry_id)
   STDERR.flush
-  db.close
-  system("muscle -quiet -in '#{seq.entry_id}.hom' -out '#{seq.entry_id}.out'")
+  align = "muscle -quiet -in " + hom + " -out " + seq.entry_id + ".out"
+  system(align)
   if (gblocks)
    len = gblocks(seq.entry_id + ".afa", seq.entry_id + ".out")
   else
@@ -66,9 +79,9 @@ def runAlignment(db, seq, dataset, blastHomologs, gblocks)
   db.connect
   db.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
   if (!len.nil? && len > 0)
-    return seq.entry_id + ".afa"
+    return seq.entry_id + ".afa", spHash, functHash
   else
-    return nil
+    return nil, nil, nil
   end
 end
 
@@ -84,21 +97,21 @@ def runPhylogeny(db, seq, dataset, alignFile)
   return treeFile
 end
 
-def processTree(db, seq, dataset, treeFile, alignFile, 
-                annotate, exclude, ruleMaj)
+def processTree(db, seq, dataset, treeFile, spHash, 
+                functHash, annotate, exclude, ruleMaj)
   if (!treeFile.nil? && File.exist?(treeFile))
-    begin
+    #begin
       id = seq.entry_id
-      addSpecies(seq, treeFile, alignFile)
+      addSpecies(seq, treeFile, spHash)
       db.createTree(id, dataset, File.read(treeFile))
       tree = NewickTree.fromFile(treeFile)
       db.createClassification(tree, id, dataset, exclude, ruleMaj)
-      db.createAnnotation(tree, id, dataset) if annotate
-    rescue
-      STDERR.printf("Problem %s handling %s. Skipping\n", $!, treeFile)
-      STDERR.flush
-      return
-    end
+      db.createAnnotation(tree, id, dataset, functHash) if annotate
+      #rescue
+      #STDERR.printf("Problem %s handling %s. Skipping\n", $!, treeFile)
+      #STDERR.flush
+      #return
+      #end
   end
 end
 
@@ -209,16 +222,18 @@ def processPep(db, seq, dataset, opt)
   seq.entry_id.gsub!("(","")
   seq.entry_id.gsub!(")","")
   if (!db.processed?(seq.entry_id, dataset))
-    runBlast(db, seq, dataset, opt.maxHits, opt.evalue) if (!opt.skipBlast)
-    blastHomologs = db.fetchBlast(seq.entry_id, dataset, opt.evalue, 
-                                       opt.maxTree, db.tax)
+    runBlast(db, seq, dataset, opt.maxHits, opt.evalue, 
+             opt.proteindb) if (!opt.skipBlast)
+    blastHomologs = db.fetchBlast(seq.entry_id, dataset, 
+                                  opt.evalue, opt.maxTree)
     if (!blastHomologs.nil? && blastHomologs.size > 2)
-      alignFile = runAlignment(db, seq, dataset, blastHomologs,
-                               opt.gblocks) 
+      alignFile, spHash, functHash = runAlignment(db, seq, 
+        dataset, blastHomologs, opt.proteindb, opt.gblocks)
       if (!alignFile.nil?)
         treeFile = runPhylogeny(db, seq, dataset, alignFile)
-        processTree(db, seq, dataset, treeFile, alignFile, 
-                    opt.annotate, opt.exclude, opt.ruleMaj)    
+        processTree(db, seq, dataset, treeFile, spHash, 
+                    functHash, opt.annotate, opt.exclude, 
+                    opt.ruleMaj)
       end
     end
     deleteFiles(seq.entry_id, [".pep", ".tree", ".afa", ".hom", ".blast",
