@@ -282,7 +282,7 @@ class ApisDB
       "family", "genus", "species"]
     if (@taxa[taxid])
       s = ""
-      while (@parents[taxid] > 1)
+      while (taxid !=  1)
         if (goodRanks.include?(@ranks[taxid]))
           if (s == "")
             s = @taxa[taxid]
