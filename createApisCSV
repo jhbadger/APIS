@@ -143,6 +143,7 @@ if (!datasets.empty?)
     if (opt.cut)
       file.close if file != STDOUT
       next if (File.exist?(dataset + ext) && opt.exist)
+      next if (File.exist?(dataset + ext + ".bz2") && opt.exist)
       file = File.new(dataset + ext, "w")
       file << header.to_csv({:col_sep=>opt.delim})
     end

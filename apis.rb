@@ -250,12 +250,14 @@ def runTimeLogic(prot, db, dataset, opt)
     STDERR.printf("To use TimeLogic you must supply server:user:password (eg. tmlsrv2:cventer:darwin)\n")
     exit(1)
   end
+  dcshow = "dc_show -database a -user #{user} -password #{password} -server #{server}"
+  timedb = `#{dcshow} | grep #{File.basename(opt.proteindb)}`.split(" ").first
   if (db.count("blast where dataset = '#{dataset}'") == 0)
     STDERR.printf("Currently creating blast on Timelogic Server...\n")
     STDERR.flush
     command = "dc_run -parameters tera-blastp "
     command += "-query " + prot + " "
-    command += "-database " + File.basename(opt.proteindb) + " "
+    command += "-database " + timedb + " "
     command += "-threshold significance=#{opt.evalue} "
     command += "-max_alignments #{opt.maxHits} "
     command += "-server #{server} -user #{user} -password #{password} "
@@ -278,6 +280,7 @@ def runTimeLogic(prot, db, dataset, opt)
         brows = []
         STDERR.printf("Loading blast for sequence %d...\n", count)
       end
+      desc = desc[0,1000] if desc.length > 1000
       brows.push([query, dataset, target, desc, 
         tlen.to_i, qstart.to_i, qend.to_i, tstart.to_i, tend.to_i, 
         ident.to_i, pos.to_i, score.to_i, sig.to_f]) if ident.to_i > 0
