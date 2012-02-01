@@ -100,18 +100,18 @@ end
 def processTree(db, seq, dataset, treeFile, spHash, 
                 functHash, annotate, exclude, ruleMaj)
   if (!treeFile.nil? && File.exist?(treeFile))
-    #begin
+    begin
       id = seq.entry_id
       addSpecies(seq, treeFile, spHash)
       db.createTree(id, dataset, File.read(treeFile))
       tree = NewickTree.fromFile(treeFile)
       db.createClassification(tree, id, dataset, exclude, ruleMaj)
       db.createAnnotation(tree, id, dataset, functHash) if annotate
-      #rescue
-      #STDERR.printf("Problem %s handling %s. Skipping\n", $!, treeFile)
-      #STDERR.flush
-      #return
-      #end
+    rescue
+      STDERR.printf("Problem %s handling %s. Skipping\n", $!, treeFile)
+      STDERR.flush
+      return
+    end
   end
 end
 
