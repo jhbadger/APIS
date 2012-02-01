@@ -255,7 +255,7 @@ def runTimeLogic(prot, db, dataset, opt)
     STDERR.flush
     command = "dc_run -parameters tera-blastp "
     command += "-query " + prot + " "
-    command += "-database " + db.timelogicdb + " "
+    command += "-database " + File.basename(opt.proteindb) + " "
     command += "-threshold significance=#{opt.evalue} "
     command += "-max_alignments #{opt.maxHits} "
     command += "-server #{server} -user #{user} -password #{password} "
@@ -296,7 +296,7 @@ def runGridApis(db, dataset, opt)
   end
   cmd = "apisRun "
   cmd += "-a " if opt.annotate
-  cmd += "-d #{opt.database} "
+  cmd += "-d #{opt.proteindb} "
   cmd += "-h #{opt.host} "
   cmd += "-t #{opt.maxTree} "
   cmd += "-g " if (opt.gblocks)
