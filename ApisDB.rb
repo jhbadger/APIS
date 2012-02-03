@@ -189,7 +189,8 @@ class ApisDB
   
    # interprets tree, creating classification and updating table
    def createClassification(tree, name, dataset, exclude, ruleMaj)
-    classification = [name, dataset] + tree.createClassification(self, exclude, ruleMaj)
+    classification = [name, dataset] 
+    classification += tree.createClassification(name, self, exclude, ruleMaj)
     insert("classification",[classification])
    end
    
