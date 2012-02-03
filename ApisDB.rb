@@ -189,33 +189,8 @@ class ApisDB
   
    # interprets tree, creating classification and updating table
    def createClassification(tree, name, dataset, exclude, ruleMaj)
-     cons = consensusTax(tree, name, ruleMaj)
-     lines = []
-     cons.each do |line|
-       lines.push(line) if (line.grep(/#{exclude}/).empty? || exclude.nil?)
-     end
-     first = lines[0]
-     first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
-     if (lines[1].nil?)
-       second = nil
-     else
-       second = lines[1]
-     end
-     mixed = false
-     classification = [name, dataset]
-     7.times do |level|
-       mixed = true if first[level] == "Mixed"
-       first[level] = "Mixed" if mixed
-       if (first[level] == "Mixed" || second.nil? || first[level] == second[level])
-         outgroup = 0
-       else
-         outgroup = 1
-       end
-       first[level] = "Undefined" if first[level].nil?
-       classification.push(first[level][0..45])
-       classification.push(outgroup)
-     end
-     insert("classification",[classification])
+    classification = [name, dataset] + tree.createClassification(self, exclude, ruleMaj)
+    insert("classification",[classification])
    end
    
   # inserts phylogenomic annotation
@@ -296,6 +271,11 @@ class ApisDB
     else
       return (["unknown"]*7).join("; ")
     end
+  end
+  
+  # return taxid of string or nil if none
+  def taxid(string)
+    return @nums[string.to_s.gsub(" ","_")]
   end
 
   # returns array of consensus taxonomy at each relative level of tree
@@ -420,11 +400,11 @@ class ApisDB
   def  self.dbsFromSources(sources, user, password)
     dbs = Hash.new
     sources.each do |source|
-      db = ApisDB.new("mysql://#{user}:#{password}@#{source}/", "")
+      db = ApisDB.new("mysql://#{user}:#{password}@#{source}/")
       db.query("SHOW DATABASES").each do |row|
         dbname = row[0]
         if (dbname =~/_apis/ && !dbs[dbname])
-          dbs[dbname] = ApisDB.new("mysql://#{user}:#{password}@#{source}/#{dbname}", "")
+          dbs[dbname] = ApisDB.new("mysql://#{user}:#{password}@#{source}/#{dbname}")
           dbs[dbname].close
         end
       end
@@ -500,29 +480,34 @@ end
 
 class NewickTree
   # returns classification of node based on taxonomy
-  def createClassification(node_name, tax, exclude, ruleMaj)
-    consensus = []
-    return  [] if (relatives(node_name).nil?)
-    relatives(node_name).each do |list|
-      counts = []
-      list.each do |relative|
-        acc, contig = relative.split("-")
-	      contig, rest = contig.split("__")
-	      groups = tax[contig]
-	      next if groups.nil?
-        groups.size.times do |i|
-          counts[i] = Hash.new if counts[i].nil?
-          counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
-          counts[i][groups[i]] += 1
-        end
-      end
-      if (ruleMaj)
-        consensus.push(counts.majority)
-      else
-        consensus.push(counts.absolute)
-      end
+  def createClassification(name, db, exclude, ruleMaj)
+    cons = db.consensusTax(self, name, ruleMaj)
+    lines = []
+    cons.each do |line|
+      lines.push(line) if (line.grep(/#{exclude}/).empty? || exclude.nil?)
     end
-    return consensus.first
+    first = lines[0]
+    first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
+    if (lines[1].nil?)
+      second = nil
+    else
+      second = lines[1]
+    end
+    mixed = false
+    classification = []
+    7.times do |level|
+      mixed = true if first[level] == "Mixed"
+      first[level] = "Mixed" if mixed
+      if (first[level] == "Mixed" || second.nil? || first[level] == second[level])
+        outgroup = 0
+      else
+        outgroup = 1
+      end
+      first[level] = "Undefined" if first[level].nil?
+      classification.push(first[level][0..45])
+      classification.push(outgroup)
+    end
+    return classification
   end
 end
 

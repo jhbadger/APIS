@@ -33,7 +33,7 @@ end
 
 dataset = ARGV.shift
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 query = "SELECT sequence.seq_name, kingdom, phylum, class AS cl, ord, family, genus, species, input_ann.annotation as in_ann, apis_ann.annotation as ap_ann FROM sequence "
 query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name AND classification.dataset = sequence.dataset "

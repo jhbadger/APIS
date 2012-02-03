@@ -31,7 +31,7 @@ ARGV.options do |o|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 inList = "("
 if (opt.all)

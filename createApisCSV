@@ -38,8 +38,8 @@ ARGV.options do |o|
   o.on("-f ", "--file ", String, "only include ids from file") {|t| opt.file = t}
   o.on("-h ", "--host ", String, "database host (#{opt.host})") {|t| opt.host = t}
   o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opt.limit = t}
-  o.on("-p ", "--database ", String, 
-       "protein database to use (default #{opt.database})") {|p| opt.database = p}
+  o.on("-d ", "--database ", String, 
+       "protein database to use (default #{opt.proteindb})") {|d| opt.proteindb = d}
   o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
@@ -58,7 +58,8 @@ ARGV.options do |o|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
+db.loadTaxonomy(opt.proteindb)
 
 if (opt.all || opt.exp)
   db.query("select dataset from dataset").each do |row|
@@ -85,10 +86,6 @@ if (!datasets.empty?)
     header.push("Blast Coverage")
   end
 
-  if (opt.tree || opt.relax)
-    db.tax # load taxonomy
-  end
-
   def summarizeClass(db, tax)
     t = ""
     tid = nil
@@ -102,12 +99,7 @@ if (!datasets.empty?)
       goodRank = rank
     end
     t = "NO_TREE" if t == ""
-    if (goodRank != "")
-      db.query("SELECT taxon_id FROM #{db.proteindb}.taxonomy WHERE name = '#{goodRank.to_s.quote}' LIMIT 1").each do |row|
-        tid = row.first
-      end
-    end
-    return t, tid
+    return t, db.taxid(goodRank)
   end
 
 
@@ -191,7 +183,8 @@ if (!datasets.empty?)
           rtax = ""
           rtid = nil
         else
-          relax = newick.createClassification(row[0], db.tax, nil, true)
+          relax = newick.createClassification(row[0], db, nil, true)
+          relax -= [1,0]
           rtax, rtid = summarizeClass(db, relax)
         end
         row[4..10] = [tax, tid, rtax, rtid]

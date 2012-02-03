@@ -40,7 +40,7 @@ if (ARGV.size < 1 && (!opt.all && !opt.exp))
 end
 
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 header = ["Sequence", "Dataset", "Kingdom", "Neighbor", "Bootstrap", "Distance"]
 header += ["COG", "COG Definition"] if opt.cog

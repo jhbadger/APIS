@@ -91,7 +91,7 @@ def summarizeTax(consense)
   return summary
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 species = Hash.new
 taxonomy = Hash.new

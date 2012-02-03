@@ -38,7 +38,7 @@ ARGV.options do |opts|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 fieldNames =  ["kingdom","phylum","class","ord","family","genus","species"]
 rank = fieldNames[opt.level]

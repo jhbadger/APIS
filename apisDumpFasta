@@ -41,7 +41,7 @@ ARGV.options do |o|
   end
 end
 
-db = ApisDB.new(opt.host + "/" + opt.storage, opt.database)
+db = ApisDB.new(opt.host + "/" + opt.storage)
 
 if (opt.all || opt.exp)
   db.query("SELECT dataset FROM dataset").each do |row|
