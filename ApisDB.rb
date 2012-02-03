@@ -279,6 +279,17 @@ class ApisDB
     return @nums[string.to_s.gsub(" ","_")]
   end
 
+  # return a complete species taxonomy hash for all species
+  def fullSpeciesTaxonomyHash
+    taxHash = Hash.new
+    @ranks.keys.each do |num|
+      if (@ranks[num] == "species")
+        taxHash[@taxa[num]] = taxonomyString(num).gsub("_", " ")
+      end
+    end
+    return taxHash
+  end
+  
   # returns array of consensus taxonomy at each relative level of tree
   def consensusTax(tree, taxon, ruleMaj)
     consensus = []
