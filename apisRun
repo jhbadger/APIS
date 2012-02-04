@@ -25,6 +25,7 @@ opt.queue = "medium"
 opt.rulemaj = false
 opt.storage = ""
 opt.clear = false
+opt.skipTree = false
 opt.skipBlast = false
 opt.gblocks = false
 opt.timelogic = false
@@ -62,8 +63,10 @@ o.on("-t ", "--maxTree ", Integer,
      "max number of seqs in tree (default #{opt.maxTree})") {|t| opt.maxTree = t}
 o.on("-v ", "--timelogic ", 
      "use timelogic server:user:password (default #{opt.timelogic})") {|t| opt.timelogic = t}
+o.on("-w", "--skipTree", 
+           "skip tree/alignment tree step (default #{opt.skipTree})") {opt.skipTree = true}
 o.on("-x", "--skipBlast", 
-     "skip blast step (default #{opt.skipBlast})") {opt.skipBlast = true}
+      "skip blast step (default #{opt.skipBlast})") {opt.skipBlast = true}
 o.on("-y ", "--exclude ", String,
      "exclude taxonomy matching regexp from run") {|y| opt.exclude = y}
 o.on("-z ", "--size ", Integer,  

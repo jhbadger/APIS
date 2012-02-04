@@ -228,9 +228,9 @@ def processPep(db, seq, dataset, opt)
                                   opt.evalue, opt.maxTree)
     if (!blastHomologs.nil? && blastHomologs.size > 2)
       alignFile, spHash, functHash = runAlignment(db, seq, 
-        dataset, blastHomologs, opt.proteindb, opt.gblocks)
+        dataset, blastHomologs, opt.proteindb, opt.gblocks) if (!opt.skipTree)
       if (!alignFile.nil?)
-        treeFile = runPhylogeny(db, seq, dataset, alignFile)
+        treeFile = runPhylogeny(db, seq, dataset, alignFile) if (!opt.skipTree)
         processTree(db, seq, dataset, treeFile, spHash, 
                     functHash, opt.annotate, opt.exclude, 
                     opt.ruleMaj)
