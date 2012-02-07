@@ -55,16 +55,16 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
   homFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
   homs = blastHomologs.join(",")
   `fastacmd -d #{proteindb} -s "#{homs}"`.split(">").each do |seq|
-    next if seq == ""
+    next if seq == "" || seq.nil?
     header, seq = seq.split("\n", 2)
     seqid, ann = header.split(" ")
     seqid.gsub!("lcl|", "")
-    ann = ann.split("||").first
-    ann, sp = ann.split("::")
+    ann = ann.to_s.split("||").first
+    ann, sp = ann.to_s.split("::")
     spHash[seqid] = sp
     functHash[seqid] = ann
     homFile.print ">" + seqid + "\n"
-    homFile.print seq.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
+    homFile.print seq.to_s.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
   end
   homFile.close
   STDERR.printf("Aligning %s...\n", seq.entry_id)

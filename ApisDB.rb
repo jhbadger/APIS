@@ -163,7 +163,7 @@ class ApisDB
     query(query)
     lines = []
     Bio::FlatFile.new(Bio::FastaFormat, File.new(afa)).each do |aseq|
-      lines.push([seq_name, dataset, aseq.entry_id, 
+      lines.push([seq_name, dataset, aseq.entry_id[0..99], 
                   aseq.definition.split(" ", 2).last, aseq.seq])
     end
     insert("alignment", lines)
