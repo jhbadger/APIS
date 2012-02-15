@@ -195,7 +195,11 @@ if (!datasets.empty?)
         if (tree.nil? || newick.nil?)
           row.push(nil)
         else
-          row.push(newick.findNode(row[0]).parent.name)
+          begin
+            row.push(newick.findNode(row[0]).parent.name)
+          rescue
+            row.push(nil)
+          end
         end
       end
       row.push(tree) if (opt.tree)
