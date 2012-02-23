@@ -81,7 +81,7 @@ if (opt.taxonomy)
   query += " AND classification.seq_name = sequence.seq_name)"
 end
 query += " WHERE sequence.dataset IN #{inClause}"
-query+= " AND processed == 0" if (opt.unprocessed)
+query+= " AND processed = 0" if (opt.unprocessed)
 db.query(query).each do |row|
   seq_name, dataset, seq, processed = row.shift, row.shift, row.shift, row.shift
   printIt = false
