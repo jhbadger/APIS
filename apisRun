@@ -91,6 +91,7 @@ end
 
 
 db = ApisDB.new(opt.host + "/" + opt.storage)
+db.close
 db.loadTaxonomy(opt.proteindb)
 
 ARGV.each do |fasta|
