@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'apis'
+require 'bio'
+require 'date'
+require 'ostruct'
+
+
+opt = OpenStruct.new 
+
+opt.maxHits = 50
+opt.evalue = 1e-10
+opt.minOrf = 50
+opt.storage = ""
+opt.clear = false
+opt.include = false
+opt.timelogic = ""
+
+ApisDB.loadOptions(opt)
+
+o = OptionParser.new
+o.banner << " fasta [fasta...]"
+o.on("-d ", "--database ", String, 
+     "protein database to use (default #{opt.proteindb})") {|d| opt.proteindb = d}
+o.on("-e ", "--evalue ", Float, 
+     "set BLASTP evalue (default #{opt.evalue})") {|e| opt.evalue = e}
+o.on("-h ", "--host ", String, "database host (default #{opt.host})") {|h| opt.host = h}
+o.on("-o ", "--orfSize ", Integer, 
+     "minimum aa length for DNA ORFs (default #{opt.minOrf})") {|o| opt.minOrf = o}
+o.on("-m ", "--maxHits ", Integer, 
+     "max number of BLASTP hits (default #{opt.maxHits})") {|m| opt.maxHits = m}
+o.on("-v ", "--timelogic ", 
+      "use timelogic server:user:password (required!)") {|t| opt.timelogic = t}
+o.on("-s ", "--storage ", String, "storage database") {|s| opt.storage = s}
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size < 1)
+  STDERR << o
+  exit(1)
+end
+
+server, user, password = opt.timelogic.split(":")
+if (password.nil?)
+  STDERR.printf("To use TimeLogic you must supply server:user:password (eg. tmlsrv2:cventer:darwin)\n")
+  exit(1)
+end
+
+if (opt.storage == "")
+  STDERR.printf("A storage database must be specified\n")
+  exit(1)
+end
+
+db = ApisDB.new(opt.host + "/" + opt.storage)
+ARGV.each do |fasta|
+  prot = asProt(fasta, opt.minOrf)
+  dataset, ext = File.basename(prot).gsub("apisRun_","").gsub("_input","").split(".")
+  db.createDataset(dataset, ENV["USER"], Date.today.to_s, File.basename(opt.proteindb, ".pep"))
+  db.loadPeptides(prot, dataset, opt.include)
+  runTimeLogic(prot, db, dataset, opt)
+  STDERR << "Completed TimeLogic for " << fasta << "\n"
+end
+
+db.close
