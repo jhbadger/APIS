@@ -35,7 +35,9 @@ class ApisDB
   # query db with sql and return query result class in array form
   def query(sql)
     begin
-      return @db.query(sql)
+      result = @db.query(sql)
+      @db.close # conserve connections by releasing it
+      return result
     rescue Exception => e
       if (e.message =~/not connected/)
         connect
@@ -48,7 +50,6 @@ class ApisDB
   
   # return count matching condition
   def count(condition)
-    connect if (!@connected)
     query = "SELECT count(*) FROM #{condition}"
     return get(query).first.to_i
   end
@@ -420,7 +421,6 @@ class ApisDB
           dbs[dbname].close
         end
       end
-      db.close
     end
     return dbs
   end

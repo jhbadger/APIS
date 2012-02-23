@@ -16,9 +16,7 @@ def runBlast(db, seq, dataset, maxHits, evalue, proteindb)
     seqFile.close
     blast = "blastall -p blastp -d #{proteindb} -i '#{seq.entry_id+".pep"}' "
     blast += "-b#{maxHits} -v#{maxHits} -e#{evalue}"
-    db.close
     system("#{blast} > '#{seq.entry_id}.blast' 2>/dev/null")
-    db.connect
     if (File.size(seq.entry_id + ".blast") > 300) # skip empty BLAST
       brows = []
       Bio::Blast::Default::Report.open(seq.entry_id + ".blast", "r").each do |query|
@@ -40,7 +38,6 @@ def runBlast(db, seq, dataset, maxHits, evalue, proteindb)
         end
       end
       db.insert("blast", brows)
-      db.close
     end
   end
 end
@@ -54,9 +51,9 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
   
   homFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
   homs = blastHomologs.join(",")
-  `fastacmd -d #{proteindb} -s "#{homs}"`.split(">").each do |seq|
-    next if seq == "" || seq.nil?
-    header, seq = seq.split("\n", 2)
+  `fastacmd -d #{proteindb} -s "#{homs}"`.split(/^>/).each do |record|
+    next if record == "" || record.nil?
+    header, sq = record.split("\n", 2)
     seqid, ann = header.split(" ")
     seqid.gsub!("lcl|", "")
     ann = ann.to_s.split("||").first
@@ -64,9 +61,8 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
     spHash[seqid] = sp
     functHash[seqid] = ann
     homFile.print ">" + seqid + "\n"
-    homFile.print seq.to_s.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
+    homFile.print sq.to_s.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
   end
-  homFile.close
   STDERR.printf("Aligning %s...\n", seq.entry_id)
   STDERR.flush
   align = "muscle -quiet -in " + hom + " -out " + seq.entry_id + ".out"
@@ -286,7 +282,6 @@ def runTimeLogic(prot, db, dataset, opt)
         ident.to_i, pos.to_i, score.to_i, sig.to_f]) if ident.to_i > 0
     end
     db.insert("blast", brows) if brows.size > 0
-    db.close
     File.unlink(prot + ".blast")
   end
 end
