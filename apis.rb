@@ -63,6 +63,7 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
     homFile.print ">" + seqid + "\n"
     homFile.print sq.to_s.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
   end
+  homFile.close
   STDERR.printf("Aligning %s...\n", seq.entry_id)
   STDERR.flush
   align = "muscle -quiet -in " + hom + " -out " + seq.entry_id + ".out"
@@ -72,7 +73,6 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
   else
     len = trimAlignment(seq.entry_id + ".afa", seq.entry_id + ".out")
   end
-  db.connect
   db.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
   if (!len.nil? && len > 0)
     return seq.entry_id + ".afa", spHash, functHash
