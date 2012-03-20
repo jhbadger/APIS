@@ -263,13 +263,13 @@ end
 
 # function to generate link to metarep or NCBI for draw, below
 def metaLink(entry)
-  metalink = "http://www.jcvi.org/phylo-metarep/phylodb/seguid/"
+  metaLink = "http://www.jcvi.org/metarep/phylodb/seguid/"
   ncbiLink = "http://www.ncbi.nlm.nih.gov/entrez/"
   protLink = "viewer.fcgi?db=protein&val="
   if (entry =~ /^gi[\_]*([0-9]*)/ || entry =~ /(^[A-Z|0-9]*)\|/)
     return ncbiLink + protLink + $1
   else
-    return metalink + entry.gsub(":","<>").gsub("/", "[]").gsub("+","()")
+    return metaLink + entry.gsub(":","<>").gsub("/", "[]").gsub("+","()")
   end
 end
 
