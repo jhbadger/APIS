@@ -261,19 +261,11 @@ get "/:db/:dataset/:seq/tree" do |db, dataset, seq|
   haml :jcvi
 end
 
-# function to generate gi link to ncbi, manatee for draw, below
- def phyLink(entry)
-   ncbiLink = "http://www.ncbi.nlm.nih.gov/entrez/"
-   protLink = "viewer.fcgi?db=protein&val="
-   manLink = "http://manatee-int.jcvi.org/tigr-scripts/euk_manatee/shared/ORF_infopage.cgi?db=phytoplankton&orf="
-   if (entry =~ /^gi[\_]*([0-9]*)/ || entry =~ /(^[A-Z|0-9]*)\|/)
-     return ncbiLink + protLink + $1
-   elsif (entry =~/jgi_[0-9]+.([0-9]+.[A-Z|a-z|0-9]+)/)
-     return manLink+$1
-   else
-     return nil
-   end
- end
+# function to generate gi link to metarep for draw, below
+def metaLink(entry)
+  metalink = "http://www.jcvi.org/phylo-metarep/phylodb/seguid/"
+  return metalink + entry.gsub(":","<>").gsub("/", "[]").gsub("+","()")
+end
 
 # display Tree PDF
 ["/:db/:dataset/:seq/pdf", "/:db/:dataset/:seq/id_pdf"].each do |path|
@@ -289,7 +281,7 @@ end
     pdf = ""
     settings.dbs[db].query("SELECT tree FROM tree WHERE dataset='#{dataset}' AND seq_name = '#{seq}'").each do |row|
       tree = NewickTree.new(row[0])
-      pdf = tree.draw("--#{seq}", boot="width", linker = :phyLink, labelName = false,
+      pdf = tree.draw("--#{seq}", boot="width", linker = :metaLink, labelName = false,
       highlights = Hash.new, brackets = nil, rawNames = raw)
     end
     settings.dbs[db].close
@@ -426,7 +418,3 @@ get  "/:db/:dataset/:level/:group" do |db, dataset, level, group|
   settings.dbs[db].close
   haml :jcvi
 end
-
-
-
-
