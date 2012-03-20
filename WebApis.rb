@@ -261,10 +261,16 @@ get "/:db/:dataset/:seq/tree" do |db, dataset, seq|
   haml :jcvi
 end
 
-# function to generate gi link to metarep for draw, below
+# function to generate link to metarep or NCBI for draw, below
 def metaLink(entry)
   metalink = "http://www.jcvi.org/phylo-metarep/phylodb/seguid/"
-  return metalink + entry.gsub(":","<>").gsub("/", "[]").gsub("+","()")
+  ncbiLink = "http://www.ncbi.nlm.nih.gov/entrez/"
+  protLink = "viewer.fcgi?db=protein&val="
+  if (entry =~ /^gi[\_]*([0-9]*)/ || entry =~ /(^[A-Z|0-9]*)\|/)
+    return ncbiLink + protLink + $1
+  else
+    return metalink + entry.gsub(":","<>").gsub("/", "[]").gsub("+","()")
+  end
 end
 
 # display Tree PDF
