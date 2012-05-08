@@ -1,8 +1,11 @@
 #!/usr/bin/env ruby
 
-require 'ApisDB'
 require 'optparse'
 require 'ostruct'
+
+# add current directory to load path
+$LOAD_PATH.unshift(File.dirname($0))
+require 'ApisDB'
 
 opt = OpenStruct.new
 opt.name = false

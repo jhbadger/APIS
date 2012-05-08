@@ -2,9 +2,12 @@
 
 require 'Newick'
 require 'optparse'
-require 'ApisDB'
 require 'csv'
 require 'ostruct'
+
+# add current directory to load path
+$LOAD_PATH.unshift(File.dirname($0))
+require 'ApisDB'
 
 opt = OpenStruct.new
 opt.target = false
@@ -124,6 +127,7 @@ db.query("SELECT seq_name, tree FROM tree WHERE dataset = '#{dataset}'").each do
     boot = 100
     while (query != nil && query.taxa.size < alltaxa)
       consense = []
+      p query.taxa
       query.taxa.each do |taxon|
         next if taxon == seq_name
         taxsp = taxon.split(/-|__/)[1]

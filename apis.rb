@@ -4,6 +4,9 @@ require 'ApisDB'
 require 'ZFile'
 require 'SunGrid'
 
+ENV["PATH"] += ":" + File.dirname($0) + "/supportBin/" + `uname`.chomp
+
+p `which Gblocks`
 $VERBOSE = false
 
 # run NCBI blast for a given sequence

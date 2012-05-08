@@ -1,6 +1,9 @@
 require 'Newick'
 require 'bio'
 
+# add support bin to path
+ENV["PATH"] += ":" + File.dirname($0) + "/supportBin/" + `uname`.chomp
+
 $VERBOSE = false
 
 def align(alignFile, homologFile)

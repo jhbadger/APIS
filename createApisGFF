@@ -4,6 +4,9 @@ require 'optparse'
 require 'Newick'
 require 'ostruct'
 require 'csv'
+
+# add current directory to load path
+$LOAD_PATH.unshift(File.dirname($0))
 require 'ApisDB'
 
 opt = OpenStruct.new

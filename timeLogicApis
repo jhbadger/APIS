@@ -1,11 +1,13 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'apis'
 require 'bio'
 require 'date'
 require 'ostruct'
 
+# add current directory to load path
+$LOAD_PATH.unshift(File.dirname($0))
+require 'apis'
 
 opt = OpenStruct.new 
 

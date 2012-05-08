@@ -1,5 +1,8 @@
 # starts sinatra application by Phusion Passenger
 require 'sinatra'
+
+# add current directory to load path
+$LOAD_PATH.unshift(File.dirname($0))
 require 'WebApis'
 
 set :environment, :production
