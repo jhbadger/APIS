@@ -2,6 +2,7 @@
 
 require 'optparse'
 require 'ostruct'
+require 'rubygems'
 require 'csv'
 
 # add current directory to load path

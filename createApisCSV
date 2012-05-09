@@ -6,6 +6,7 @@
 # "relaxed" classification can be included
 
 require 'optparse'
+require 'rubygems'
 require 'Newick'
 require 'ostruct'
 require 'csv'

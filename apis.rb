@@ -6,7 +6,6 @@ require 'SunGrid'
 
 ENV["PATH"] += ":" + File.dirname($0) + "/supportBin/" + `uname`.chomp
 
-p `which Gblocks`
 $VERBOSE = false
 
 # run NCBI blast for a given sequence
@@ -295,7 +294,7 @@ def runGridApis(db, dataset, opt)
     STDERR.printf("A JCVI project number is needed for grid jobs\n")
     exit(1)
   end
-  cmd = "apisRun "
+  cmd = File.dirname($0)+"/apisRun "
   cmd += "-a " if opt.annotate
   cmd += "-d #{opt.proteindb} "
   cmd += "-h #{opt.host} "

@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
+require 'rubygems'
 require 'bio'
 require 'date'
 require 'ostruct'

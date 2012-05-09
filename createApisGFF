@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
+require 'rubygems'
 require 'Newick'
 require 'ostruct'
 require 'csv'
