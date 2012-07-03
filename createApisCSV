@@ -13,6 +13,15 @@ require 'csv'
 
 # add current directory to load path
 $LOAD_PATH.unshift(File.dirname($0))
+
+#check version of ruby
+if (RUBY_VERSION < "1.9.2")
+  STDERR << "Error: version of ruby on your path should be 1.9.2 or newer to run "
+  STDERR << "APIS and its scripts. You are using the ruby in " << `which ruby`.chomp 
+  STDERR << " which is only version " << RUBY_VERSION << ".\n"
+  exit(1)
+end
+
 require 'ApisDB'
 
 opt = OpenStruct.new
