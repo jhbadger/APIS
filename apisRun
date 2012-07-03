@@ -5,6 +5,7 @@ require 'rubygems'
 require 'bio'
 require 'date'
 require 'ostruct'
+require 'Phylogeny'
 
 # add current directory to load path
 $LOAD_PATH.unshift(File.dirname($0))
@@ -14,6 +15,11 @@ if (RUBY_VERSION < "1.9.2")
   STDERR << "Error: version of ruby on your path should be 1.9.2 or newer to run "
   STDERR << "APIS and its scripts. You are using the ruby in " << `which ruby`.chomp 
   STDERR << " which is only version " << RUBY_VERSION << ".\n"
+  exit(1)
+end
+
+if (!(command?("quicktree") && command?("muscle") && command?("blastall")))
+  STDERR << "Error: quicktree, muscle, and blastall are required to run APIS\n"
   exit(1)
 end
 
