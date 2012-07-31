@@ -39,11 +39,11 @@ class ApisDB
       @db.close # conserve connections by releasing it
       return result
     rescue Exception => e
-      if (e.message =~/not connected/)
+      if (e.message =~/not connected|gone away/)
         connect
         retry
       else
-        raise e
+        raise e + " what?"
       end
     end
   end
@@ -86,11 +86,11 @@ class ApisDB
     begin
       return @db.query(sql).fetch_row
     rescue Exception => e
-      if (e.message =~/not connected/)
+      if (e.message =~/not connected|gone away/)
         connect
         retry
       else
-        raise e
+        raise e + " huh?"
       end
     end
   end
