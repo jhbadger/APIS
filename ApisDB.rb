@@ -3,12 +3,12 @@ require 'ostruct'
 
 class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
-  def initialize(uri)
+  def initialize(uri = nil)
     token = "[a-z|0-9|A-Z|_|-]+"
-    if (uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})*/)
+    if (uri && uri =~/(#{token}):\/\/(#{token}):(#{token})\@(#{token})\/(#{token})*/)
       @driver, @user, @password, @server, @database = $1, $2, $3, $4, $5
       connect
-    else
+    elsif uri
       STDERR << "can't parse " << uri << "\n"
       exit(1)
     end
@@ -226,14 +226,14 @@ class ApisDB
   end
 
   # loads phylodb taxonomy 
-  def loadTaxonomy(proteindb)
+  def loadTaxonomy(proteindb, tax = nil)
     if !@taxa
       @nums = Hash.new
       @taxa = Hash.new
       @ranks = Hash.new
       @parents = Hash.new
       @fullTax = Hash.new
-      tax = Dir.glob(File.dirname(proteindb) + "/usedTaxa*").first
+      tax = Dir.glob(File.dirname(proteindb) + "/usedTaxa*").first if !tax
       if (tax.nil?)
         STDERR << "Can't find usedTaxa file in " << 
           File.dirname(proteindb) << "\n"
@@ -255,17 +255,13 @@ class ApisDB
   
   # returns full taxonomy string for taxonid
   def taxonomyString(taxid)
-    goodRanks = ["superkingdom","kingdom", "phylum", "class", "order", 
-      "family", "genus", "species"]
     if (@taxa[taxid])
       s = ""
-      while (taxid !=  1)
-        if (goodRanks.include?(@ranks[taxid]))
-          if (s == "")
-            s = @taxa[taxid]
-          else
-            s = @taxa[taxid] + "; " + s
-          end
+      while (taxid !=  1 && taxid != 131567)
+        if (s == "")
+          s = @taxa[taxid]
+        else
+          s = @taxa[taxid] + "; " + s
         end
         taxid = @parents[taxid]
       end
