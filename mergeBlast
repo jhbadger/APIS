@@ -28,7 +28,7 @@ end
 sortCmd = "sort -t $'\t' -k1 -k12 -r -n"
 
 counts = Hash.new
-`#{sortCmd} #{ARGV.join(" ")}`.split("\n").each do |line|
+`#{sortCmd} #{ARGV.join(" ")} | sort -u`.split("\n").each do |line|
   next if line=~/^QUERY/
   fields = line.chomp.split("\t")
   name, evalue = fields[0], fields[10].to_f
