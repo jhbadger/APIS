@@ -8,32 +8,41 @@ ENV["PATH"] += ":" + File.dirname($0) + "/supportBin/" + `uname`.chomp
 
 $VERBOSE = false
 
+# do this to avoid splitting on "|"
+class Bio::FastaFormat
+  def full_id
+    return definition.split(" ").first
+  end
+end
+
 # run NCBI blast for a given sequence
 def runBlast(db, seq, dataset, maxHits, evalue, proteindb)
-  if (db.count("blast where dataset = '#{dataset}' and seq_name = '#{seq.entry_id}'") == 0)
-    STDERR.printf("Currently creating blast for #{seq.entry_id}...\n")
-    STDERR.flush
-    seqFile = File.new(seq.entry_id + ".pep", "w")
-    seqFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
-    seqFile.close
-    blast = "blastall -p blastp -d #{proteindb} -i '#{seq.entry_id+".pep"}' "
-    blast += "-b#{maxHits} -v#{maxHits} -e#{evalue}"
-    system("#{blast} > '#{seq.entry_id}.blast' 2>/dev/null")
-    if (File.size(seq.entry_id + ".blast") > 300) # skip empty BLAST
+  if (db.count("blast where dataset = '#{dataset}' and seq_name = '#{seq.full_id}'") == 0)
+    if (!File.exist?(seq.full_id + ".blast"))
+      STDERR.printf("Currently creating blast for #{seq.full_id}...\n")
+      STDERR.flush
+      seqFile = File.new(seq.full_id + ".pep", "w")
+      seqFile.print seq.seq.gsub("*","").to_fasta(seq.full_id)
+      seqFile.close
+      blast = "blastall -p blastp -d #{proteindb} -i '#{seq.full_id+".pep"}' "
+      blast += "-b#{maxHits} -v#{maxHits} -e#{evalue}"
+      system("#{blast} > '#{seq.full_id}.blast' 2>/dev/null")
+    end
+    if (File.size(seq.full_id + ".blast") > 300) # skip empty BLAST
       brows = []
-      Bio::Blast::Default::Report.open(seq.entry_id + ".blast", "r").each do |query|
+      Bio::Blast::Default::Report.open(seq.full_id + ".blast", "r").each do |query|
         query.each do |subject|
           sname, sdef = subject.definition.split(" ",2)
           sdef = sdef[0,1000] if (sdef.length > 1000)
           subject.hsps.each do |hsp|
             begin
-              brows.push([seq.entry_id, dataset, sname, sdef, 
+              brows.push([seq.full_id, dataset, sname, sdef, 
                           subject.target_len, hsp.query_from, 
                           hsp.query_to, hsp.hit_from, hsp.hit_to, 
                           hsp.percent_identity, hsp.percent_positive,
                           hsp.score, hsp.evalue])
             rescue
-              STDERR.printf("skipping HSP in %s...\n", seq.entry_id)
+              STDERR.printf("skipping HSP in %s...\n", seq.full_id)
               STDERR.flush
             end
           end
@@ -46,12 +55,12 @@ end
 
 # run MUSCLE for a given list of homologs
 def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
-  hom = seq.entry_id + ".hom"
+  hom = seq.full_id + ".hom"
   homFile = File.new(hom, "w")
   spHash = Hash.new
   functHash = Hash.new
   
-  homFile.print seq.seq.gsub("*","").to_fasta(seq.entry_id)
+  homFile.print seq.seq.gsub("*","").to_fasta(seq.full_id)
   homs = blastHomologs.join(",")
   `fastacmd -d #{proteindb} -s "#{homs}"`.split(/^>/).each do |record|
     next if record == "" || record.nil?
@@ -66,27 +75,27 @@ def runAlignment(db, seq, dataset, blastHomologs, proteindb, gblocks)
     homFile.print sq.to_s.gsub("\n","").gsub(Regexp.new(".{1,60}"), "\\0\n")
   end
   homFile.close
-  STDERR.printf("Aligning %s...\n", seq.entry_id)
+  STDERR.printf("Aligning %s...\n", seq.full_id)
   STDERR.flush
-  align = "muscle -quiet -in " + hom + " -out " + seq.entry_id + ".out"
+  align = "muscle -quiet -in \"" + hom + "\" -out \"" + seq.full_id + ".out\""
   system(align)
   if (gblocks)
-   len = gblocks(seq.entry_id + ".afa", seq.entry_id + ".out")
+   len = gblocks(seq.full_id + ".afa", seq.full_id + ".out")
   else
-    len = trimAlignment(seq.entry_id + ".afa", seq.entry_id + ".out")
+    len = trimAlignment(seq.full_id + ".afa", seq.full_id + ".out")
   end
-  db.createAlignment(seq.entry_id, dataset, seq.entry_id + ".afa")
+  db.createAlignment(seq.full_id, dataset, seq.full_id + ".afa")
   if (!len.nil? && len > 0)
-    return seq.entry_id + ".afa", spHash, functHash
+    return seq.full_id + ".afa", spHash, functHash
   else
     return nil, nil, nil
   end
 end
 
 def runPhylogeny(db, seq, dataset, alignFile)
-  treeFile = seq.entry_id + ".tree"
+  treeFile = seq.full_id + ".tree"
   begin 
-    makeQuickNJTree(treeFile, alignFile, seq.entry_id, true)
+    makeQuickNJTree(treeFile, alignFile, seq.full_id, true)
   rescue
     STDERR.printf("Problem %s inferring tree %s. Skipping\n", $!, treeFile)
     STDERR.flush
@@ -99,7 +108,7 @@ def processTree(db, seq, dataset, treeFile, spHash,
                 functHash, annotate, exclude, ruleMaj)
   if (!treeFile.nil? && File.exist?(treeFile))
     begin
-      id = seq.entry_id
+      id = seq.full_id
       addSpecies(seq, treeFile, spHash)
       db.createTree(id, dataset, File.read(treeFile))
       tree = NewickTree.fromFile(treeFile)
@@ -171,8 +180,8 @@ def asProt(fasta, minOrf, verbose = nil, dna = false)
         end
       end
       Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(fasta)).each do |seq|
-        if (orfs[seq.entry_id])
-          id = seq.entry_id
+        if (orfs[seq.full_id])
+          id = seq.full_id
           seq = Bio::Sequence::NA.new(seq.seq)
           orfs[id].each do |orf|
             s, e, strand, frame = orf.split(" ")
@@ -216,13 +225,12 @@ end
 
 # pipeline for a single protein
 def processPep(db, seq, dataset, opt)
-  seq.definition.gsub!("|","_")
-  seq.entry_id.gsub!("(","")
-  seq.entry_id.gsub!(")","")
-  if (!db.processed?(seq.entry_id, dataset))
+  seq.full_id.gsub!("(","")
+  seq.full_id.gsub!(")","")
+  if (!db.processed?(seq.full_id, dataset))
     runBlast(db, seq, dataset, opt.maxHits, opt.evalue, 
              opt.proteindb) if (!opt.skipBlast)
-    blastHomologs = db.fetchBlast(seq.entry_id, dataset, 
+    blastHomologs = db.fetchBlast(seq.full_id, dataset, 
                                   opt.evalue, opt.maxTree)
     if (!blastHomologs.nil? && blastHomologs.size > 2)
       alignFile, spHash, functHash = runAlignment(db, seq, 
@@ -234,12 +242,33 @@ def processPep(db, seq, dataset, opt)
                     opt.ruleMaj)
       end
     end
-    deleteFiles(seq.entry_id, [".pep", ".tree", ".afa", ".hom", ".blast",
+    deleteFiles(seq.full_id, [".pep", ".tree", ".afa", ".hom", ".blast",
                               ".out"])
-    db.setProcessed(seq.entry_id, dataset)
+    db.setProcessed(seq.full_id, dataset)
   end
 end
 
+# imports NCBI tab blast into APIS for current dataset 
+def importNCBI(ncbi, db, dataset)
+  oldQuery = nil
+  count = 0
+  brows = []
+  return if (db.count("blast where dataset = '#{dataset}'") > 0)
+  File.new(ncbi).each do |line|
+    query, target, ident, alen, matches, gaps, qstart, qend, 
+      tstart, tend, sig, score, qlen, tlen = line.chomp.split("\t")
+    count += 1
+    if (count % 10000 == 0)
+      db.insert("blast", brows)
+      brows = []
+      STDERR.printf("Loading blast for sequence %s...\n", query)
+    end
+    brows.push([query, dataset, target, "", 
+      tlen.to_i, qstart.to_i, qend.to_i, tstart.to_i, tend.to_i, 
+      ident.to_i, matches.to_i, score.to_i, sig.to_f])
+  end
+  db.insert("blast", brows) if brows.size > 0
+end
 
 # runs blast job on TimeLogic Server
 def runTimeLogic(prot, db, dataset, opt)
@@ -249,7 +278,13 @@ def runTimeLogic(prot, db, dataset, opt)
     exit(1)
   end
   dcshow = "dc_show -database a -user #{user} -password #{password} -server #{server}"
-  timedb = `#{dcshow} | grep #{File.basename(opt.proteindb)}`.split(" ").first
+  timelist = `#{dcshow} | grep #{File.basename(opt.proteindb)}`
+  timedb = timelist.split(" ").first
+  if (timedb.nil?)
+    STDERR.printf("Error: Cannot find timelogic db for %s\n",opt.proteindb)
+    exit(1)
+  end
+  timedb = "private:" + timedb if timelist.index("private")
   if (db.count("blast where dataset = '#{dataset}'") == 0)
     STDERR.printf("Currently creating blast on Timelogic Server...\n")
     STDERR.flush

@@ -47,6 +47,7 @@ opt.skipTree = false
 opt.skipBlast = false
 opt.gblocks = false
 opt.timelogic = false
+opt.ncbi = false
 
 ApisDB.loadOptions(opt)
 
@@ -73,6 +74,7 @@ o.on("-p ", "--project ", String,
      "JCVI project number for grid blast") {|p| opt.project = p}
 o.on("-m ", "--maxHits ", Integer, 
      "max number of BLASTP hits (default #{opt.maxHits})") {|m| opt.maxHits = m}
+o.on("-ncbi ", "--ncbi ", String, "import m8 format BLASTP (vs phylodb)") {|n| opt.ncbi = n}
 o.on("-q ", "--queue ", String, 
      "grid queue to use (default #{opt.queue})") {|q| opt.queue = q}
 o.on("-r", "--ruleMajority", "use majority classification") {opt.ruleMaj = true}
@@ -120,6 +122,10 @@ ARGV.each do |fasta|
   db.loadPeptides(prot, dataset, opt.include)
   if (opt.timelogic)
     runTimeLogic(prot, db, dataset, opt)
+  end
+  if (opt.ncbi && !opt.skipBlast)
+    importNCBI(opt.ncbi, db, dataset)
+    opt.skipBlast = true
   end
   if (opt.local)
     Bio::FlatFile.new(Bio::FastaFormat, File.new(prot)).each do |seq|

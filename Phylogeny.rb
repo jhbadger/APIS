@@ -4,6 +4,13 @@ require 'bio'
 # add support bin to path
 ENV["PATH"] += ":" + File.dirname($0) + "/supportBin/" + `uname`.chomp
 
+# do this to avoid splitting on "|"
+class Bio::FastaFormat
+  def full_id
+    return definition.split(" ").first
+  end
+end
+
 $VERBOSE = false
 
 # checks to see if a command exists on the path
@@ -24,11 +31,11 @@ def gblocks(trimFile, alignFile)
   out = File.new(trimFile, "w")
   gb = alignFile + ".out-gb"
   len = nil
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(gb)).each {|seq|
+  Bio::FlatFile.new(Bio::FastaFormat, File.new(gb)).each do |seq|
     nosp = seq.seq.gsub(" ","")
-    out.print Bio::Sequence.auto(nosp).to_fasta(ali[seq.entry_id], 60)
+    out.print Bio::Sequence.auto(nosp).to_fasta(ali[seq.full_id], 60)
     len = nosp.length if len.nil?
-  }
+  end
   out.close
   File.unlink(alignFile + ".out", alignFile + ".out-gb", alignFile + 
               ".out-gb.htm")
@@ -48,7 +55,7 @@ def trimAlignment(trimFile, alignFile, maxGapFract = 0.5, exclude = nil)
       gapNum = 0
       count = 0
       seqs.each do |seq|
-        next if (exclude && seq.entry_id =~/#{exclude}/)
+        next if (exclude && seq.full_id =~/#{exclude}/)
 	      gapNum += 1 if (seq.data[i].chr == "-" || seq.data[i].chr == "?" || seq.data[i].chr == ".")
 	      count += 1
       end
@@ -73,17 +80,17 @@ end
 def backAlign(dna, pepAlign, dnaAlign)
   pep = Hash.new
   Bio::FlatFile.new(Bio::FastaFormat, File.new(pepAlign)).each do |seq|
-    pep[seq.entry_id] = seq.seq
+    pep[seq.full_id] = seq.seq
   end
   dnaAlign = File.new(dnaAlign, "w")
   Bio::FlatFile.new(Bio::FastaFormat, File.new(dna)).each do |seq|
-    if (!pep[seq.entry_id])
-      raise "No #{seq.entry_id} in #{pepAlign}\n"
+    if (!pep[seq.full_id])
+      raise "No #{seq.full_id} in #{pepAlign}\n"
     end
     dseq = ""
     j = 0
-    pep[seq.entry_id].length.times do |i|
-      c = pep[seq.entry_id][i].chr
+    pep[seq.full_id].length.times do |i|
+      c = pep[seq.full_id][i].chr
       if (c == "-")
         dseq += "---"
       else
@@ -105,11 +112,11 @@ def calcPercentIdent(fasta)
   Bio::FlatFile.new(Bio::FastaFormat, File.new(fasta)).each do |seq1|
     len = seq1.length if len.nil?
     Bio::FlatFile.new(Bio::FastaFormat, File.new(fasta)).each do |seq2|
-      next if seq2.entry_id == seq1.entry_id
+      next if seq2.full_id == seq1.full_id
       idents.push(0)
-      seq1.length.times {|i|
+      seq1.length.times do |i|
         idents[idents.size - 1] += 1 if (seq1.seq[i] == seq2.seq[i])
-      }
+      end
     end
   end
   tot = 0
@@ -122,25 +129,25 @@ def removeAA(trimFile, alignFile, aaList)
   if (File.exist?(alignFile) && !File.exist?(trimFile))
     seqs = []
     badCols = []
-    Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
+    Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
       seq.data.tr!("\n","")
       seqs.push(seq)
-    }
-    seqs[0].data.length.times {|i|
+    end
+    seqs[0].data.length.times do |i|
       bad = 0
-      seqs.each {|seq|
+      seqs.each do |seq|
 	bad += 1 if aaList.include?(seq.data[i].chr)
-      }
+      end
       badCols.push(i) if (bad == seqs.size)
-    }
+    end
     out = File.new(trimFile, "w")
-    seqs.each {|seq|
-      badCols.each {|col|
+    seqs.each do |seq|
+      badCols.each do |col|
 	seq.data[col] = "!"
-      }
+      end
       seq.data.tr!("!","")
       out.print Bio::Sequence.auto(seq.data).to_fasta(seq.definition, 60)
-    }
+    end
     out.close
   end
 end
@@ -149,9 +156,9 @@ def fasta2Nexus(alignFile, dna, nexFile = nil)
   seqs = Hash.new
   name = nil
   seqFile = File.new(alignFile)
-  Bio::FlatFile.new(Bio::FastaFormat, seqFile).each {|seq|
-    seqs[seq.entry_id] = seq.seq.gsub("?","-").gsub(".","-")
-  }
+  Bio::FlatFile.new(Bio::FastaFormat, seqFile).each do |seq|
+    seqs[seq.full_id] = seq.seq.gsub("?","-").gsub(".","-")
+  end
   seqFile.close
   if (dna)
     type = "NUC"
@@ -171,10 +178,10 @@ def fasta2Nexus(alignFile, dna, nexFile = nil)
   out.print "MATRIX\n"
   pos = 0
   while (pos < aLen)
-    seqs.keys.sort.each {|name|
+    seqs.keys.sort.each do |name|
       out.printf("%35s ", name)
       out.printf("%s\n", seqs[name][pos..pos + lineLen - 1])
-    }
+    end
     pos += lineLen 
     out.printf("\n")
   end
@@ -186,7 +193,7 @@ def fasta2Phylip(alignFile, phyFile)
   seqs = Hash.new
   name = nil
   inFile = File.new(alignFile)
-  inFile.each {|line|
+  inFile.each do |line|
     line.chomp!
     line.tr!("*","")
     if (line =~ /^>/)
@@ -195,19 +202,19 @@ def fasta2Phylip(alignFile, phyFile)
     else
       seqs[name] += line.gsub(".","-")
     end
-  }
+  end
   inFile.close
   phy = File.new(phyFile, "w")
   lineLen = 60
   phy.printf("%d %d\n", seqs.size, seqs[name].length)
   pos = 0
   while (pos < seqs[name].length)
-    seqs.keys.sort.each {|name|
+    seqs.keys.sort.each do |name|
       if (pos == 0)
         phy.printf("%-10s ", name)
       end
       phy.printf("%s\n", seqs[name][pos..pos + lineLen - 1])
-    }
+    end
     pos += lineLen
     phy.printf("\n")
   end
@@ -218,15 +225,15 @@ end
 def fasta2PAML(alignFile, pamlFile) 
   seqs = []
   length = nil
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
+  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
     length = seq.seq.length
-    seqs.push(Bio::Sequence::AA.new(seq.seq).to_fasta(seq.entry_id,60))
-  }
+    seqs.push(Bio::Sequence::AA.new(seq.seq).to_fasta(seq.full_id,60))
+  end
   paml = File.new(pamlFile, "w")
   paml.printf(" %d %d\n", seqs.size, length)
-  seqs.each {|seq|
+  seqs.each do |seq|
     paml.print seq
-  }
+  end
   paml.close
 end
 
@@ -330,17 +337,17 @@ def fasta2Stockholm(stockFile, alignFile)
   align = Hash.new 
   aSize = 0
   nSize = 0
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
-    align[seq.entry_id] = seq.seq
+  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
+    align[seq.full_id] = seq.seq
     aSize = seq.seq.length
-    nSize = seq.entry_id.size if (nSize < seq.entry_id.size)
-  }
-  0.step(aSize, 50) {|i|
+    nSize = seq.full_id.size if (nSize < seq.full_id.size)
+  end
+  0.step(aSize, 50) do |i|
     stock.printf("\n")
-    align.keys.sort.each {|key|
+    align.keys.sort.each do |key|
       stock.printf("%-#{nSize}s %s\n", key, align[key][i..i+49]) 
-    }
-  }
+    end
+  end
   stock.printf("//\n")
   stock.close
   return stockFile
@@ -405,7 +412,7 @@ def aliasFasta(fasta, ali, out, outgroup = nil, trim = false)
   aliFile = File.new(ali, "w") if (!ali.nil?)
   aliHash = Hash.new
   orfNum = "SID0000001"
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(fasta)).each {|seq|
+  Bio::FlatFile.new(Bio::FastaFormat, File.new(fasta)).each do |seq|
     newName = orfNum
     name = seq.definition.split(" ").first
     newName = "SID0000000" if (outgroup == name)
@@ -414,7 +421,7 @@ def aliasFasta(fasta, ali, out, outgroup = nil, trim = false)
     seq.definition = newName
     outFile.print seq
     orfNum = orfNum.succ if (outgroup != name)
-  }
+  end
   outFile.close
   aliFile.close if (ali)
   if (@trim)
@@ -442,15 +449,15 @@ def writeCloseEC(treeFile, eclist, neighborFile, name)
   neighbor = File.new(neighborFile, "w")
   relatives = tree.relatives(name)
   if (!relatives.nil?)
-    relatives.each {|list|
+    relatives.each do |list|
       allECs = []
-      list.each {|relative|
+      list.each do |relative|
         ecs = relative.split("_").last.split(" ")
         ecs.each {|ec| allECs.push(ec)}
-      }
+      end
       bestEC = allECs.mostCommon
       neighbor.printf("%s\n", bestEC)
-    }
+    end
     neighbor.close
   end
   return top
@@ -460,12 +467,12 @@ def classifyNeighbors(neighborFile, combine = nil, exclude = nil)
   groupClass = ["kingdom", "phylum", "class", "order", "family", "genus"]
   neighbors = []
   consensus = Hash.new
-  File.new(neighborFile).each {|line|
+  File.new(neighborFile).each do |line|
     neighbors.push(line.chomp.split("\t"))
-  }
+  end
   level1 = nil
   level2 = nil
-  neighbors.size.times {|i|
+  neighbors.size.times do |i|
     if (exclude.nil? || neighbors[i].grep(/#{exclude}/).empty?)
       level1, level2 = neighbors[i], neighbors[i + 1]
       break
@@ -473,11 +480,11 @@ def classifyNeighbors(neighborFile, combine = nil, exclude = nil)
       gr = neighbors[i].grep(/#{exclude}/).first
       STDERR.printf("Excluding #{gr} as requested\n")
     end
-  }
+  end
   if (neighbors[0].nil?)
     return consensus
   end
-  [groupClass.size, neighbors[0].size].min.times {|i|
+  [groupClass.size, neighbors[0].size].min.times do |i|
     group = groupClass[i]
     next if (level1.nil?)
     if (combine)
@@ -495,7 +502,7 @@ def classifyNeighbors(neighborFile, combine = nil, exclude = nil)
 	consensus[group] = "Contained within #{level1[i]}"
       end
     end
-  }
+  end
   return consensus
 end 
 
@@ -512,11 +519,11 @@ end
 def addDefinitions(qseq, treeFile, alignFile)
   definitions = Hash.new
   tree = NewickTree.fromFile(treeFile)
-  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each {|seq|
+  Bio::FlatFile.new(Bio::FastaFormat, File.new(alignFile)).each do |seq|
     next if qseq.definition == seq.definition
     name = seq.definition.split(" ").first
     definitions[name] = seq.definition.tr('()[] ",', "_")
-  }
+  end
   tree.unAlias(definitions)
   tree.write(treeFile)
 end
@@ -525,12 +532,12 @@ end
 def isDNA?(file)
   string = ""
   count = 0
-  File.new(file).each {|line|
+  File.new(file).each do |line|
     next if (line =~ /^>/)
     string += line.chomp.upcase.gsub("-","").gsub(".","")
     count += 1
     break if (count == 100)
-  }
+  end
   agtc = 1.0 * string.count("AGTCU")
   if (agtc / string.size > 0.90)
     return true

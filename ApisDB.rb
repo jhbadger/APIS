@@ -1,5 +1,6 @@
 require 'mysql'
 require 'ostruct'
+require 'Phylogeny'
 
 class ApisDB
   # initalize db with a uri like "mysql://access:access@mysql-lan-pro/misc_apis"
@@ -43,7 +44,7 @@ class ApisDB
         connect
         retry
       else
-        raise e + " what?"
+        raise e.message + " what?"
       end
     end
   end
@@ -117,7 +118,7 @@ class ApisDB
     inputs = []
     count = 0
     Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(prot)).each do |seq|
-      id = seq.entry_id.gsub("(","").gsub(")","")
+      id = seq.definition.split(" ").first.gsub("(","").gsub(")","")
       seqs.push([id, dataset, seq.seq, 0])
       count += 1
       name, rest = seq.definition.split(" ", 2)
@@ -125,9 +126,8 @@ class ApisDB
         rest = rest[0,1000] if (rest.length > 1000)
         inputs.push([id, dataset, rest.strip, 'input'])
       end
-      if (count % 10000 == 0)
+      if (count % 1000 == 0)
         insert("sequence", seqs)
-        insert("annotation", inputs)
         seqs = []
         inputs = []
         STDERR.printf("Loaded sequence %d...\n", count)
@@ -135,7 +135,6 @@ class ApisDB
     end
     if (seqs.size > 0)
       insert("sequence", seqs)
-      insert("annotation", inputs)
     end
   end
   
@@ -164,7 +163,7 @@ class ApisDB
     query(query)
     lines = []
     Bio::FlatFile.new(Bio::FastaFormat, File.new(afa)).each do |aseq|
-      lines.push([seq_name, dataset, aseq.entry_id[0..99], 
+      lines.push([seq_name, dataset, aseq.full_id[0..99], 
                   aseq.definition.split(" ", 2).last, aseq.seq])
     end
     insert("alignment", lines)

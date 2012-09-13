@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'ostruct'
+
+opt = OpenStruct.new
+o = OptionParser.new
+opt.evalue = 1e-9
+opt.hits = 50
+opt.verbose = false
+
+o.banner << " blast [...blast...]"
+o.on("-e ", "--evalue ", Float, "max evalue (default #{opt.evalue}") {|e| opt.evalue = e}
+o.on("-m ", "--maxhits ", Integer, "max hits per query (default #{opt.hits})") {|m| opt.hits = m}
+o.on("-v", "--verbose", "print accs with few hits (default #{opt.verbose})") {|t| opt.verbose = true}
+begin
+  o.parse!
+rescue
+  STDERR << $!.message << "\n"
+  STDERR << o
+  exit(1)
+end
+if (ARGV.size < 1)
+  STDERR << o
+  exit(1)
+end
+
+sortCmd = "sort -t $'\t' -k1 -k12 -r -n"
+
+counts = Hash.new
+`#{sortCmd} #{ARGV.join(" ")}`.split("\n").each do |line|
+  next if line=~/^QUERY/
+  fields = line.chomp.split("\t")
+  name, evalue = fields[0], fields[10].to_f
+  counts[name] = 0 if !counts[name]
+  if (evalue <= opt.evalue && counts[name] < opt.hits)
+    print line + "\n"
+    counts[name] += 1
+  end
+end
+
+if (opt.verbose)
+  counts.keys.sort.each do |name|
+    STDERR.printf("%s\t%d\n", name, counts[name]) if counts[name] < 3
+  end
+end
