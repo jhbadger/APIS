@@ -38,6 +38,7 @@ opt.relax = false
 opt.limit = false
 opt.blast = false
 opt.exist = false
+opt.phylometa = false
 
 ApisDB.loadOptions(opt)
 
@@ -53,6 +54,7 @@ ARGV.options do |o|
   o.on("-l ", "--limit ", Integer, "number of records to limit to") {|t| opt.limit = t}
   o.on("-d ", "--database ", String, 
        "protein database to use (default #{opt.proteindb})") {|d| opt.proteindb = d}
+  o.on("-p", "--phylometarep-format") {opt.phylometa = true}
   o.on("-r", "--relax", "relaxed classification (#{opt.relax})") {opt.relax = true}
   o.on("-s ", "--storage ", String, "storage database (default #{opt.storage})") {|t| opt.storage = t}
   o.on("-t", "--tree", "include tree in file (#{opt.tree})") {|t| opt.tree = t}
@@ -136,7 +138,7 @@ if (!datasets.empty?)
   milestone = num / 200.0
 
   file = STDOUT
-  file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut)
+  file << header.to_csv({:col_sep=>opt.delim}) if (!opt.cut && !opt.phylometa)
   ext = ".csv"
   ext = ".tab" if (opt.delim == "\t")
   count = 0
@@ -150,7 +152,7 @@ if (!datasets.empty?)
       next if (File.exist?(dataset + ext) && opt.exist)
       next if (File.exist?(dataset + ext + ".bz2") && opt.exist)
       file = File.new(dataset + ext, "w")
-      file << header.to_csv({:col_sep=>opt.delim})
+      file << header.to_csv({:col_sep=>opt.delim}) if !opt.phylometa
     end
     
     if (opt.blast)
@@ -167,21 +169,37 @@ if (!datasets.empty?)
     
     STDERR << "Writing Spreadsheet...\n"
 
-    query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
-    query += "kingdom, phylum, class, ord, family, genus, species, tree"
-    query += " FROM sequence "
-    query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
-    query += "AND sequence.dataset = classification.dataset " 
-    query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
-    query += "AND sequence.dataset = tree.dataset " 
-    query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
-    query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
-    query += "WHERE sequence.dataset='#{dataset.to_s.quote}'"
-    query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
-    query += " LIMIT #{opt.limit}" if (opt.limit)
-  
+    if (!opt.phylometa)
+       query =  "SELECT sequence.seq_name, sequence.dataset, length(sequence), annotation, "
+       query += "kingdom, phylum, class, ord, family, genus, species, tree"
+       query += " FROM sequence "
+       query += "LEFT JOIN classification ON classification.seq_name = sequence.seq_name "
+       query += "AND sequence.dataset = classification.dataset " 
+       query += "LEFT JOIN tree ON tree.seq_name = sequence.seq_name "
+       query += "AND sequence.dataset = tree.dataset " 
+       query += "LEFT JOIN annotation ON annotation.seq_name = sequence.seq_name "
+       query += "AND sequence.dataset = annotation.dataset and annotation.source='APIS' "
+       query += "WHERE sequence.dataset='#{dataset.to_s.quote}'"
+       query += " AND sequence.seq_name IN #{inClause}" if (inClause != "")
+       query += " LIMIT #{opt.limit}" if (opt.limit)
+  else
+    groups = ["kingdom", "phylum", "class", "ord", "family", "genus", "species"]
+    query = "SELECT classification.seq_name, "
+    groups.each do |group|
+    	query += group + ", " +  group + "_outgroup, "
+    end
+    query = query.chop.chop
+    query += ", tree FROM classification JOIN tree ON "
+    query += "tree.dataset = classification.dataset AND "
+    query += "tree.seq_name = classification.seq_name "
+    query += "WHERE classification.dataset='#{dataset.to_s.quote}'"
+  end
     seen = Hash.new
     db.query(query).each do |row|
+      if (opt.phylometa)
+      	 file << row.join("\t") + "\n"
+         next
+      end
       next if seen[row[0]]
       seen[row[0]] = true
       tree = row.pop
