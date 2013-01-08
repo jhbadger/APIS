@@ -3,7 +3,7 @@
 require 'rubygems'
 require 'Newick'
 require 'optparse'
-require 'fastcsv'
+require 'fastercsv'
 require 'ostruct'
 
 # add current directory to load path
