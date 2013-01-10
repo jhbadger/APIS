@@ -3,7 +3,7 @@
 require 'optparse'
 require 'ostruct'
 require 'rubygems'
-require 'csv'
+require 'fastercsv'
 
 # add current directory to load path
 $LOAD_PATH.unshift(File.dirname($0))
