@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+VER = "1.00"
+DATE = "05/05/2013"
+
+require 'rubygems'
+require 'ZFile'
+require 'trollop'
+require 'yajl'
+require 'sqlite3'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+
+# load apis.conf defaults from current, home, or APIS directory
+defaults = loadDefaults
+
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+	banner File.basename($0) << " " << VER << " " << DATE
+	opt :input, "apis.json results file", :type=>:string, :required=>true
+	opt :verbose, "print verbose status messages to STDERR"
+end
+
+fname = File.basename(opts.input).split(".json").first
+apistxt = File.new(fname+"_apis.txt", "w")
+
+db = SQLite3::Database.new(fname + ".db")
+schema = "CREATE TABLE apis (name VARCHAR(100) PRIMARY KEY ASC, "
+schema += "tree VARCHAR(10000), "
+schema += "strict_kingdom VARCHAR(100), strict_kingdom_outgroup BOOLEAN, "
+schema += "strict_phylum VARCHAR(100), strict_phylum_outgroup BOOLEAN, "
+schema += "strict_class VARCHAR(100), strict_class_outgroup BOOLEAN, "
+schema += "strict_order VARCHAR(100), strict_order_outgroup BOOLEAN, "
+schema += "strict_family VARCHAR(100), strict_family_outgroup BOOLEAN, "
+schema += "strict_genus VARCHAR(100), strict_genus_outgroup BOOLEAN, "
+schema += "strict_species VARCHAR(100), strict_species_outgroup BOOLEAN, "
+schema += "strict_taxon VARCHAR(100), relaxed _taxon_id INT, "
+schema += "relaxed_kingdom VARCHAR(100), relaxed_kingdom_outgroup BOOLEAN, "
+schema += "relaxed_phylum VARCHAR(100), relaxed_phylum_outgroup BOOLEAN, "
+schema += "relaxed_class VARCHAR(100), relaxed_class_outgroup BOOLEAN, "
+schema += "relaxed_order VARCHAR(100), relaxed_order_outgroup BOOLEAN, "
+schema += "relaxed_family VARCHAR(100), relaxed_family_outgroup BOOLEAN, "
+schema += "relaxed_genus VARCHAR(100), relaxed_genus_outgroup BOOLEAN, "
+schema += "relaxed_species VARCHAR(100), relaxed_species_outgroup BOOLEAN, "
+schema += "relaxed_taxon VARCHAR(100), relaxed_taxon_id INT, "
+schema += "bootstrap INT, annotation VARCHAR(255))"
+
+
+db.execute(schema)
+
+JsonStreamer.new(ZFile.new(opts.input)).each do |this|
+
+end
+
+apistxt.close
+db.close

@@ -1,0 +1,110 @@
+{
+  "name": "foobar",
+  "tree": "NO_TREE",
+  "strict_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  },
+  "relaxed_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  }
+}
+{
+  "name": "JCVI_PEP_metagenomic.orf.1134269553443.1",
+  "tree": "NO_TREE",
+  "strict_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  },
+  "relaxed_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  }
+}
+{
+  "name": "JCVI_PEP_metagenomic.orf.1134269553503.1",
+  "tree": "NO_TREE",
+  "strict_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  },
+  "relaxed_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  }
+}
+{
+  "name": "JCVI_PEP_metagenomic.orf.1134269553853.1",
+  "tree": "NO_TREE",
+  "strict_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  },
+  "relaxed_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  }
+}
+{
+  "name": "JCVI_PEP_metagenomic.orf.1134269554313.1",
+  "tree": "NO_TREE",
+  "strict_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  },
+  "relaxed_consensus": {
+    "kingdom": "NO_TREE",
+    "phylum": "NO_TREE",
+    "class": "NO_TREE",
+    "order": "NO_TREE",
+    "family": "NO_TREE",
+    "genus": "NO_TREE",
+    "species": "NO_TREE"
+  }
+}

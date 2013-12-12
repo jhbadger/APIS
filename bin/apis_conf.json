@@ -1,0 +1,8 @@
+{
+	"database": "/Users/jbadger/phylodb/phylodb_nr_1.05.1.pep",
+	"timedb": "private:phylodb_nr_1.05.1.pep",
+	"taxonomy": "/Users/jbadger/phylodb/usedTaxa.1.05.1.tab",
+	"timeuser": "jbadger",
+	"timepass": "plankton",
+	"timeserver": "tmlsrv1.jcvi.org"
+}

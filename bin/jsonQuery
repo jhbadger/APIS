@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+VER = "1.1"
+DATE = "09/23/2013"
+
+require 'rubygems'
+require 'ostruct'
+require 'trollop'
+require 'yajl'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+require "ZFile"
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+   banner File.basename($0) << " " << VER << " " << DATE
+   opt :input, "read from file rather than STDIN", :type => :string
+   opt :query, "query on JSON obj (e.g. \"[this.name] if this.strict_consensus.kingdom=='Bacteria'\")", :type=> :string
+   opt :output, "output format (tab, json)", :type => :string, :default => "tab"
+   opt :apistab, "report apis tab file"
+end
+
+Trollop::die :no_such_format unless ["tab", "json"].include?(opts.output)
+
+if (opts.input)
+   input = ZFile.new(opts.input)
+else
+   input = STDIN
+end
+
+if (opts.apistab)
+  query = "[this.name, this.relaxed_taxon, this.relaxed_taxon_id, this.annotation, this.relaxed_consensus.kingdom, this.relaxed_consensus.phylum, this.relaxed_consensus.class_name, this.relaxed_consensus.order, this.relaxed_consensus.family, this.relaxed_consensus.genus, this.relaxed_consensus.species, this.bootstrap, this.tree]"
+  output = "tab"
+  print ["Name", "Taxon", "Taxon_id", "Annotation", "Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species", "Bootstrap", "Tree"].join("\t")+"\n"
+else
+  query=opts.query
+  output = opts.output
+end
+
+if !query
+  STDERR << "Either a quety or apistab needs to be specified"
+  exit(1)
+end
+
+JsonStreamer.new(input).each do |this|
+   begin
+      this["strict_consensus"]["class_name"]=this["strict_consensus"]["class"]
+      this["relaxed_consensus"]["class_name"]=this["relaxed_consensus"]["class"]
+      this = this.to_ostruct
+      results = eval(query)
+     if opts.apistab && results[-2].nil? && results[-1] != "NO_TREE"
+       results[-2]=100
+     end
+      if results
+         if output == "tab"
+            results = [results] if results.class != "Array" && results.class != "Hash"
+            print results.to_a.join("\t") + "\n"
+         elsif output == "json"
+            print results.to_json_pp
+         end
+      end
+   rescue
+      STDERR << "Error interpreting query: " << query << $! << "\n"
+      exit(1)
+   end
+end
+
+input.close if opts.file
