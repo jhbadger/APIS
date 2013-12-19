@@ -6,7 +6,6 @@ DATE = "04/19/2013"
 
 $:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
 
-require 'rubygems'
 require 'trollop'
 require 'gchart'
 require 'ZFile'

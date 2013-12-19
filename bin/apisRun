@@ -1,10 +1,9 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.45"
-DATE = "09/17/2013"
+VER = "2.50"
+DATE = "12/19/2013"
 
-require 'rubygems'
 require 'bio'
 require 'trollop'
 require 'Newick'
@@ -24,14 +23,14 @@ defaults = loadDefaults
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
    banner File.basename($0) << " " << VER << " " << DATE
-   opt :blast, "NCBI Blast tab file(s) with seguids", :required =>true, :type => :strings
-   opt :database, "Seguid-based fastacmd indexed protein database", :type => :string, :default=>defaults["database"]
+   opt :blasts, "NCBI Blast tab file(s) with seguids", :required =>true, :type => :strings
+   opt :databases, "Seguid-based fastacmd indexed protein database", :type => :strings, :default=>[defaults["database"]]
    opt :evalue, "maximum evalue for blast hit to be counted", :default=>1e-9, :type => :float
    opt :exclude, "taxa to exclude in classification", :type => :strings
    opt :input, "protein input fasta file to process", :required => true, :type => :string
    opt :annotate, "Provide phylogenomic annotation"
    opt :maxhits, "Maximum blast hits per query sequence", :default=>50, :type => :integer
-   opt :taxonomy, "APIS usedTaxa file", :type => :string, :default=>defaults["taxonomy"]
+   opt :taxonomies, "APIS usedTaxa file(s)", :type => :strings, :default=>[defaults["taxonomy"]]
    opt :trees, "create pdf-formatted versions of trees in specified directory", :type => :string
    opt :project, "SGE grid project number", :type => :string
    opt :queue, "SGE grid queue if running on grid", :type => :string, :default => "medium"
@@ -42,7 +41,7 @@ opts = Trollop::options do
    opt :verbose, "print verbose status messages to STDERR"
 end
 
-if !opts.database || !opts.taxonomy
+if !opts.databases.first || !opts.taxonomies.first
    STDERR << "Both a database and taxonomy need to be specified\n"
    exit(1)
 end
@@ -60,16 +59,17 @@ end
 
 Dir.mkdir(opts.tmp) if !File.exists?(opts.tmp)
 
-if (opts.blast.size > 1) # merge multiple blast files
-   blast = mergeBlasts(opts.blast, dataset, opts)
+if (opts.blasts.size > 1) # merge multiple blast files
+   blast = mergeBlasts(opts.blasts, dataset, opts)
+   p blast
 else
-   blast = opts.blast.first
+   blast = opts.blasts.first
 end
 
 if (opts.project)
    runGridApis(opts, dataset, blast)
 else
-   taxonomy, tax_ids = loadTaxonomy(opts.taxonomy, opts.verbose)
+   taxonomy, tax_ids = loadTaxonomy(opts.taxonomies, opts.verbose)
 
    if File.exists?(dataset + "_apis.json")
       STDERR << "APIS data already exists for " << dataset << "\n"
@@ -97,7 +97,7 @@ else
          {"strict" => emptyAPIS, "relaxed" => emptyAPIS}, nil,nil,nil,nil,nil,nil
          pid = pep.full_id
          if bpid == pid && blastLines.size > 2 # 3 homologs + query is min tree
-            afa, functHash = align(pep, blastLines, opts.database, opts.tmp, opts.verbose)
+            afa, functHash = align(pep, blastLines, opts.databases, opts.tmp, opts.verbose)
             tree = infer(pid, afa, opts.phylo, opts.verbose)
             if tree
                boot = tree.findNode(pid).parent.name

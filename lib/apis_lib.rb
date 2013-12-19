@@ -147,10 +147,11 @@ class NewickNode # additional methods for NewickNode class
    end
 end
 
+
 # routine to merge multiple blast files and sort by query seq and evalue
 def mergeBlasts(blast, dataset, opts)
    STDERR << "Merging blasts...\n" if opts.verbose
-   sortCmd = "sort -t $'\t' -k1 -k12 -r -n"
+   sortCmd = "sort -t $'\t' -k1,1 -k12,12rn"
    mBlastFile = dataset + "_merged.blast"
 
    out = File.new(mBlastFile, "w")
@@ -307,12 +308,14 @@ def loadTaxonomy(taxf, verbose)
    tax = Hash.new
    sp = Hash.new
    tax_ids = Hash.new
-   ZFile.new(taxf).each do |line|
-      current, name, parent, rank = line.chomp.split("\t")
-      name = name.tr("(),:","")
-      tax[current.to_i] = [name, parent.to_i, rank]
-      sp[name] = current.to_i if rank == "species" || rank == "subspecies" || rank == "no rank" || rank == "metagenome"
-      tax_ids[name] = current
+   taxf.each do |tf|
+      ZFile.new(tf).each do |line|
+         current, name, parent, rank = line.chomp.split("\t")
+         name = name.tr("(),:","")
+         tax[current.to_i] = [name, parent.to_i, rank]
+         sp[name] = current.to_i if rank == "species" || rank == "subspecies" || rank == "no rank" || rank == "metagenome"
+         tax_ids[name] = current
+      end
    end
    taxonomy = Hash.new
    sp.keys.each do |s|
@@ -352,22 +355,24 @@ def qsystem(cmd, project)
 end
 
 # return seqs from fastacmd formatted blast database
-def fetchSeqs(blastids, database, functions = false, maxLength = 5000)
+def fetchSeqs(blastids, databases, functions = false, maxLength = 5000)
    seqs = []
    functHash = Hash.new
-   `fastacmd -d #{database} -s "#{blastids.join(',')}"`.split(/^>/).each do |seq|
-      lines = seq.split("\n")
-      if (!lines.empty?)
-         header = lines.shift
-         seguid = headerSeguid(header)
-         sp = headerSpecies(header)
-         functHash[seguid] = headerFunction(header) if (functions)
-         out = ">" + seguid + "__" + sp + "\n"
-         out += lines.join("\n")
-         seqs.push(out) if out.length < maxLength
+   databases.each do |database|
+      `fastacmd -d #{database} -s "#{blastids.join(',')}"`.split(/^>/).each do |seq|
+         lines = seq.split("\n")
+         if !lines.empty?
+            header = lines.shift
+            seguid = headerSeguid(header)
+            sp = headerSpecies(header)
+            functHash[seguid] = headerFunction(header) if (functions)
+            out = ">" + seguid + "__" + sp + "\n"
+            out += lines.join("\n")
+            seqs.push(out) if out.length < maxLength
+         end
       end
    end
-   if (functions)
+   if functions
       [seqs, functHash]
    else
       seqs
@@ -375,11 +380,11 @@ def fetchSeqs(blastids, database, functions = false, maxLength = 5000)
 end
 
 # runs muscle to align sequences, returns alignment as row
-def align(pep, blastlines, database, tmp, verbose)
+def align(pep, blastlines, databases, tmp, verbose)
    pid = pep.full_id
    STDERR << "Making alignment for " << pid << "...\n" if verbose
    blastids = blastlines.collect{|x| x.chomp.split("\t")[1]}
-   homologs, functions = fetchSeqs(blastids, database, true)
+   homologs, functions = fetchSeqs(blastids, databases, true)
    hom = tmp + "/" + pid + ".hom"
    out = File.new(hom.tr("*",""), "w")
    out.print ">"+pid+"\n" +pep.seq.tr("*","") + "\n" + homologs.join("\n")

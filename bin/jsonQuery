@@ -4,7 +4,6 @@ $VERBOSE=nil
 VER = "1.1"
 DATE = "09/23/2013"
 
-require 'rubygems'
 require 'ostruct'
 require 'trollop'
 require 'yajl'
