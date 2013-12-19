@@ -359,7 +359,7 @@ def fetchSeqs(blastids, databases, functions = false, maxLength = 5000)
    seqs = []
    functHash = Hash.new
    databases.each do |database|
-      `fastacmd -d #{database} -s "#{blastids.join(',')} 2>/dev/null"`.split(/^>/).each do |seq|
+      `fastacmd -d #{database} -s "#{blastids.join(',')}" 2>/dev/null`.split(/^>/).each do |seq|
          lines = seq.split("\n")
          if !lines.empty?
             header = lines.shift

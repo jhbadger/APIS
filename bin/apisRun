@@ -61,7 +61,6 @@ Dir.mkdir(opts.tmp) if !File.exists?(opts.tmp)
 
 if (opts.blasts.size > 1) # merge multiple blast files
    blast = mergeBlasts(opts.blasts, dataset, opts)
-   p blast
 else
    blast = opts.blasts.first
 end
