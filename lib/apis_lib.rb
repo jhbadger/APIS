@@ -720,7 +720,11 @@ def cmdLine(prog, opts, exclude)
    keys = opts.keys - exclude - [:help]
    keys.each do |key|
       k = key.to_s
-      cmd += " --#{key} #{opts[key]}" if !k.index("_given") && opts[key]
+      val = opts[key]
+      if val.is_a?(Array)
+         val = val.join(" ")
+      end
+      cmd += " --#{key} #{val}" if !k.index("_given") && val
    end
    cmd
 end
@@ -791,13 +795,15 @@ def runGridApis(opts, dataset, blast, n = 1000)
    if processed.keys.size > 0
       blast = remainingBlast(blast, processed, opts.verbose)
    end
-   cmd = cmdLine($0 + " --scan --erase ", opts, [:project, :queue, :input, :blast])
-   cmd += " --blast " + blast
+   cmd = cmdLine($0 + " --scan --erase ", opts, [:project, :queue, :input, :blasts])
+   cmd += " --blasts " + blast
    cmd += " --input "
    grid = SGE.new(cmd, opts.project, "4G", opts.queue, opts.tmp + "/" + dataset)
    STDERR << "Splitting peptide file for grid...\n" if opts.verbose
    seqCount = countFasta(opts.input)
-   count = seqCount/n
+   binSize = seqCount/n
+   binSize = 10 if binSize < 10
+   count = binSize
    out = nil
    Dir.glob(opts.tmp + "/*").each do |file|
       begin
@@ -808,7 +814,7 @@ def runGridApis(opts, dataset, blast, n = 1000)
    Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(opts.input)).each do |pep|
       pid = pep.full_id
       if !processed[pid]
-         if count >= seqCount/n
+         if count >= binSize
             out.close if !out.nil?
             count = 0
             out = File.new(grid.next, "w")
