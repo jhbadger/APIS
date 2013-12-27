@@ -19,7 +19,7 @@ defaults = loadDefaults
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
    banner File.basename($0) << " " << VER << " " << DATE
-   opt :database, "Seguid-based timelogic protein database(s)", :type => :strings, :default=>defaults["timedb"].collect{|x| File.basename(x)}
+   opt :database, "Seguid-based timelogic protein database(s)", :type => :strings, :default=>[defaults["timedb"]]
    opt :evalue, "maximum evalue for blast hit to be counted", :default=>1e-9, :type => :float
    opt :input, "DNA/Protein input fasta file(s) to process", :required => true, :type => :strings
    opt :maxhits, "Maximum blast hits per query sequence", :default=>50, :type => :integer
