@@ -26,7 +26,18 @@ opts = Trollop::options do
    opt :user, "timelogic user account", :default=>defaults["timeuser"], :type=>:string
    opt :password, "timelogic user password", :default=>defaults["timepass"], :type=>:string
    opt :server, "timelogic server", :default=>defaults["timeserver"], :type=>:string
+   opt :separate, "use separate blast dbs (mito, chloro, etc.)"
    opt :verbose, "print verbose status messages to STDERR"
+end
+
+if opts.separate && opts.database.size == 1
+   name = opts.database.first
+   dbs = []
+   ["chloro", "mito", "kegg", "rest", "transcript"].each do |subname|
+      dbs.push(name.gsub("phylodb_nr", "phylodb_#{subname}"))
+   end
+else
+   dbs = opts.database
 end
 
 opts.input.each do |fasta|
@@ -36,7 +47,7 @@ opts.input.each do |fasta|
       input = fasta
    end
    blasts = []
-   opts.database.each do |db|
+   dbs.each do |db|
       cmd = "dc_run -parameters tera-blastp -database #{db} "
       cmd += "-threshold significance=#{opts.evalue} "
       cmd += "-max_alignments #{opts.maxhits} -max_scores #{opts.maxhits} "
