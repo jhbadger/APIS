@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.50"
-DATE = "12/19/2013"
+VER = "2.51"
+DATE = "01/31/2014"
 
 require 'bio'
 require 'trollop'
@@ -14,7 +14,7 @@ require 'yajl'
 $:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
 
 require "apis_lib"
-require "SGE"
+require "Grid"
 require "ZFile"
 
 # load apis_conf.json defaults from current, home, or APIS directory
@@ -36,9 +36,10 @@ opts = Trollop::options do
    opt :queue, "SGE grid queue if running on grid", :type => :string, :default => "medium"
    opt :phylo, "Phylogenetic method", :default=>"nj", :type => :string
    opt :erase, "erase input peptide file upon success"
-   opt :tmp, "set temporary directory", :default=>Dir.getwd + "/tmp", :type=>:string
+   opt :tmp, "set temporary directory", :default=>Dir.pwd + "/tmp", :type=>:string
    opt :scan, "scan to first blast hit with peptide"
    opt :verbose, "print verbose status messages to STDERR"
+   opt :maxlocal, "maximum number of simultaneous local processes", :default=>4
 end
 
 if !opts.databases.first || !opts.taxonomies.first
@@ -59,13 +60,13 @@ end
 
 Dir.mkdir(opts.tmp) if !File.exists?(opts.tmp)
 
-if (opts.blasts.size > 1) # merge multiple blast files
+if opts.blasts.size > 1 # merge multiple blast files
    blast = mergeBlasts(opts.blasts, dataset, opts)
 else
    blast = opts.blasts.first
 end
 
-if (opts.project)
+if !opts.erase
    runGridApis(opts, dataset, blast)
 else
    taxonomy, tax_ids = loadTaxonomy(opts.taxonomies, opts.verbose)

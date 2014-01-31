@@ -795,17 +795,18 @@ def runGridApis(opts, dataset, blast, n = 1000)
    if processed.keys.size > 0
       blast = remainingBlast(blast, processed, opts.verbose)
    end
-   cmd = cmdLine($0 + " --scan --erase ", opts, [:project, :queue, :input, :blasts])
+   cmd = cmdLine(File.basename($0) + " --scan --erase ", opts, [:project, :queue, :input, :blasts])
    cmd += " --blasts " + blast
    cmd += " --input "
-   grid = SGE.new(cmd, opts.project, "4G", opts.queue, opts.tmp + "/" + dataset)
+   tmp = opts.tmp + "/" + dataset
+   grid = Grid.new(cmd, opts.project, "4G", "medium", tmp)
    STDERR << "Splitting peptide file for grid...\n" if opts.verbose
    seqCount = countFasta(opts.input)
    binSize = seqCount/n
    binSize = 10 if binSize < 10
    count = binSize
    out = nil
-   Dir.glob(opts.tmp + "/*").each do |file|
+   Dir.glob(tmp + "/*").each do |file|
       begin
          File.unlink(file)
       rescue
@@ -824,9 +825,9 @@ def runGridApis(opts, dataset, blast, n = 1000)
       end
    end
    out.close if !out.nil?
-   grid.submit(true)
+   grid.submit(true, !opts.project, opts.verbose, opts.maxlocal)
    endings = ["afa.json", "apis.json", "error.json"]
-   grid.join(endings)
+   grid.join(endings, dataset)
    File.unlink(blast) if processed.keys.size > 0
 end
 
