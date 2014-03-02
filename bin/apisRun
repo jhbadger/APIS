@@ -97,7 +97,7 @@ else
          {"strict" => emptyAPIS, "relaxed" => emptyAPIS}, nil,nil,nil,nil,nil,nil
          pid = pep.full_id
          if bpid == pid && blastLines.size > 2 # 3 homologs + query is min tree
-            afa, functHash = align(pep, blastLines, opts.databases, opts.tmp, opts.verbose)
+            afa, functHash = align(pep, pid, blastLines, opts.databases, opts.tmp, opts.verbose)
             tree = infer(pid, afa, opts.phylo, opts.verbose)
             if tree
                boot = tree.findNode(pid).parent.name

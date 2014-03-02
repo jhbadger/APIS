@@ -325,14 +325,15 @@ def loadTaxonomy(taxf, verbose)
 end
 
 # class for returning blast hits from m8 file, possiibly compressed
-class BlastHits
+ class BlastHits
    def initialize(blast)
-      @blastf = ZFile.new(blast)
+     @blastf = ZFile.new(blast)
    end
    def each
-      pid, matches = nil, []
-      @blastf.each do |line|
-         qid, match = line.chomp.split("\t")
+     pid, matches = nil, []
+     @blastf.each do |line|
+       qid, match = line.chomp.split("\t")
+       qid = qid.split(" ").first
          if pid != qid && !pid.nil?
             yield [pid, matches]
             matches = []
@@ -380,8 +381,7 @@ def fetchSeqs(blastids, databases, functions = false, maxLength = 5000)
 end
 
 # runs muscle to align sequences, returns alignment as row
-def align(pep, blastlines, databases, tmp, verbose)
-   pid = pep.full_id
+def align(pep, pid, blastlines, databases, tmp, verbose)
    STDERR << "Making alignment for " << pid << "...\n" if verbose
    blastids = blastlines.collect{|x| x.chomp.split("\t")[1]}
    homologs, functions = fetchSeqs(blastids, databases, true)
@@ -668,7 +668,7 @@ def aliasFasta(fasta, ali, out, outgroup = nil, trim = false)
       name = seq.definition.split(" ").first
       newName = "SID0000000" if (outgroup == name)
       aliFile.printf("%s\t%s\n", newName, seq.definition) if (ali)
-      aliHash[newName] = seq.definition.tr("(),:","_")
+      aliHash[newName] = seq.definition
       seq.definition = newName
       outFile.print seq
       orfNum = orfNum.succ if (outgroup != name)

@@ -9,7 +9,7 @@ class Grid
     @memory = memory
     @queue = queue
     @dir = dir
-    Dir.mkdir(@dir) if !Dir.exists?(@dir)
+    `mkdir -p #{@dir}` if !Dir.exists?(@dir)
     @count = 0
     @files = []
   end
