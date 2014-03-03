@@ -22,6 +22,59 @@ def loadDefaults
    defaults
 end
 
+# return hash of percentages for use in apis pie chart
+def pieProcess(dataset, format, level, withTree, percents)
+  counts = Hash.new
+  total = 0
+  if format == "json"
+    JsonStreamer.new(ZFile.new(dataset)).each do |obj|
+      if (opts.relaxed)
+        consensus = obj["relaxed_consensus"]
+      else
+        consensus = obj["strict_consensus"]
+      end
+      taxon = consensus[level]
+      if taxon != "Undefined" && (!withTree || taxon != "NO_TREE")
+        counts[taxon] = 0 if !counts[taxon]
+        counts[taxon] += 1
+        total += 1
+      end
+    end
+  else
+    headers = nil
+    ZFile.new(dataset).each do |line|
+      if headers.nil?
+        headers = line.downcase.chomp.split("\t")
+      else
+        fields = line.chomp.split("\t")
+        taxon = fields[headers.index(level)]
+        
+        if taxon != "Undefined" && (!withTree || taxon != "NO_TREE")
+          counts[taxon] = 0 if !counts[taxon]
+          counts[taxon] += 1
+          total += 1
+        end
+      end
+    end
+  end
+  percents[dataset] = Hash.new
+  counts["Misc"] = 0
+  percents[dataset]["Misc"] = 0
+  
+  counts.keys.each do |key|
+    percents[dataset][key] = 100*counts[key]/total.to_f
+  end
+  
+  counts.keys.each do |key|
+    if (percents[dataset][key] < 2 && key != "Misc")
+      percents[dataset]["Misc"] += percents[dataset][key]
+      counts.delete(key)
+      percents[dataset].delete(key)
+    end
+  end
+  percents[dataset].delete("Misc") if (percents[dataset]["Misc"] < 2)
+  percents
+end
 
 # returns true if file likely to be DNA, false otherwise
 def isDNA?(fasta)

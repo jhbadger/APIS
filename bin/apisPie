@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.01"
-DATE = "04/19/2013"
+VER = "2.05"
+DATE = "03/02/2014"
 
 $:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
 
@@ -15,52 +15,26 @@ require 'apis_lib'
 
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
-   banner File.basename($0) << " " << VER << " " << DATE
-   opt :input, "input apis.json file(s) to use", :required=>true, :type=>:strings
-   opt :level, "taxonomic level", :default=> "phylum", :type => :string
-   opt :relaxed, "use relaxed rather than strict consensus"
-   opt :with_tree, "only count cases with tree"
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :input, "input apis.json file(s) to use", :required=>true, :type=>:strings
+  opt :level, "taxonomic level", :default=> "phylum", :type => :string
+  opt :format, "json or tab", :default=>"json"
+  opt :relaxed, "use relaxed rather than strict consensus"
+  opt :with_tree, "only count cases with tree"
 end
 
 Trollop::die :no_such_rank unless ["kingdom","phylum","class","order","family","genus","species"].include?(opts.level)
 
+Trollop::die :illegal_format unless opts.format == "json" || opts.format=="tab"
+
+
 percents = Hash.new
 
 opts.input.each do |dataset|
-   STDERR.printf("Processing %s...\n", dataset)
-   counts = Hash.new
-   total = 0
-   JsonStreamer.new(ZFile.new(dataset)).each do |obj|
-      if (opts.relaxed)
-         consensus = obj["relaxed_consensus"]
-      else
-         consensus = obj["strict_consensus"]
-      end
-      taxon = consensus[opts.level]
-      if taxon != "Undefined" && (!opts.with_tree || taxon != "NO_TREE")
-         counts[taxon] = 0 if !counts[taxon]
-         counts[taxon] += 1
-         total += 1
-      end
-   end
-
-   percents[dataset] = Hash.new
-   counts["Misc"] = 0
-   percents[dataset]["Misc"] = 0
-
-   counts.keys.each do |key|
-      percents[dataset][key] = 100*counts[key]/total.to_f
-   end
-
-   counts.keys.each do |key|
-      if (percents[dataset][key] < 2 && key != "Misc")
-         percents[dataset]["Misc"] += percents[dataset][key]
-         counts.delete(key)
-         percents[dataset].delete(key)
-      end
-   end
-   percents[dataset].delete("Misc") if (percents[dataset]["Misc"] < 2)
-end
+  STDERR.printf("Processing %s...\n", dataset)
+  percents = pieProcess(dataset, opts.format, opts.level, 
+                        opts.with_tree, percents)  
+end  
 
 colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
    "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B",
@@ -80,7 +54,6 @@ percents.keys.sort.each do |dataset|
       taxa[taxon] += percents[dataset][taxon]
    end
 end
-
 colorTaxa = Hash.new
 taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each do |taxon|
    colorTaxa[taxon] = colors.shift if (colors.size > 0)
