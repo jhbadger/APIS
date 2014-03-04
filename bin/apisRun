@@ -55,7 +55,7 @@ end
 if opts.input =~/\.[0-9]/
   dataset = opts.input
 else
-  dataset = File.basename(opts.input).split(".").first
+  dataset = File.basename(opts.input, ".pep").gsub(".faa","")
 end
 
 Dir.mkdir(opts.tmp) if !File.exists?(opts.tmp)
