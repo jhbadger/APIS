@@ -22,19 +22,20 @@ def loadDefaults
    defaults
 end
 
-# return hash of percentages for use in apis pie chart
-def pieProcess(dataset, format, level, withTree, percents)
+# return hashes of percentages and counts for use in apis pie chart
+def pieProcess(file, dataset, format, level, withTree)
   counts = Hash.new
   total = 0
   if format == "json"
-    JsonStreamer.new(ZFile.new(dataset)).each do |obj|
+    JsonStreamer.new(ZFile.new(file)).each do |obj|
       if (opts.relaxed)
         consensus = obj["relaxed_consensus"]
       else
         consensus = obj["strict_consensus"]
       end
       taxon = consensus[level]
-      if taxon != "Undefined" && (!withTree || taxon != "NO_TREE")
+      next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon)
+      if taxon != "Undefined" && taxon != "Unknown" && (!withTree || taxon != "NO_TREE")
         counts[taxon] = 0 if !counts[taxon]
         counts[taxon] += 1
         total += 1
@@ -42,13 +43,13 @@ def pieProcess(dataset, format, level, withTree, percents)
     end
   else
     headers = nil
-    ZFile.new(dataset).each do |line|
+    ZFile.new(file).each do |line|
       if headers.nil?
         headers = line.downcase.chomp.split("\t")
       else
         fields = line.chomp.split("\t")
         taxon = fields[headers.index(level)]
-        
+        next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon)
         if taxon != "Undefined" && (!withTree || taxon != "NO_TREE")
           counts[taxon] = 0 if !counts[taxon]
           counts[taxon] += 1
@@ -57,23 +58,69 @@ def pieProcess(dataset, format, level, withTree, percents)
       end
     end
   end
-  percents[dataset] = Hash.new
-  counts["Misc"] = 0
-  percents[dataset]["Misc"] = 0
-  
+  percents = Hash.new
   counts.keys.each do |key|
-    percents[dataset][key] = 100*counts[key]/total.to_f
+    percents[key] = 100*counts[key]/total.to_f
   end
-  
-  counts.keys.each do |key|
-    if (percents[dataset][key] < 2 && key != "Misc")
-      percents[dataset]["Misc"] += percents[dataset][key]
-      counts.delete(key)
-      percents[dataset].delete(key)
+  [percents, counts]
+end
+
+# collect catefgories less than miscmin % as "Misc"
+def collectMisc(percents, level, miscmin)
+  percents["Misc"] = 0
+  keys = percents.keys
+  keys.each do |key|
+    if (percents[key] < miscmin && key != "Misc" && level != "kingdom")
+      percents["Misc"] += percents[key]
+      percents.delete(key)
     end
   end
-  percents[dataset].delete("Misc") if (percents[dataset]["Misc"] < 2)
+  percents.delete("Misc") if  percents["Misc"] && percents["Misc"] < 2
   percents
+end
+
+# produce hash of color hex codes for use for consistent colors across pie taxa
+def getPieColors(taxa)
+  colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
+            "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B",
+            "#B58AA5","#CECFCE","#005B9A","#0191C8","#74C2E1",
+            "#8C8984","#E8D0A9","#B7AFA3","#727B84","#DF9496",
+            "#00008B", "#0000CD", "#0000FF", "#006400", "#008000",
+            "#008000", "#008080", "#008B8B", "#00BFFF", "#00CED1",
+            "#F5FFFA", "#F8F8FF", "#FA8072" "#FAEBD7", "#FAF0E6",
+            "#FAFAD2", "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B"]
+  colors *= 5 # provide duplicates of colors to stop running out
+  colorTaxa = Hash.new
+  taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each do |taxon|
+    colorTaxa[taxon] = colors.shift if (colors.size > 0)
+  end
+  colorTaxa
+end
+
+# write Excel file of counts
+def writeCountsExcel(filename, counts)
+  require 'axlsx'
+  proj = Axlsx::Package.new
+  wb = proj.workbook
+  counts.keys.each do |level|
+    taxa = Hash.new
+    counts[level].keys.each do |key|
+      counts[level][key].keys.each do |taxon|
+        taxa[taxon] = 0 if !taxa[taxon]
+        taxa[taxon] += counts[level][key][taxon]
+      end
+    end
+    sheet = wb.add_worksheet(:name=>level)
+    sheet.add_row([""]+counts[level].keys)
+    taxa.keys.sort{|x,y| taxa[y]<=>taxa[x]}.each do |taxon|
+      row = [taxon]
+      counts[level].keys.each do |key|
+        row.push(counts[level][key][taxon])
+      end
+      sheet.add_row(row)
+    end
+  end
+  proj.serialize(filename)
 end
 
 # returns true if file likely to be DNA, false otherwise
@@ -112,7 +159,7 @@ end
 def headerFunction(header)
    begin
       seqid, ann = header.split(" ", 2)
-      ann = ann.to_s.split("<<")[1].split(">>")[0].split("||")[0]
+      ann = ann.to_s.split("\<\<")[1].split("\>\>")[0].split("||")[0]
       ann
    rescue
       ""
