@@ -49,7 +49,7 @@ def pieProcess(file, dataset, format, level, withTree)
       else
         fields = line.chomp.split("\t")
         taxon = fields[headers.index(level)]
-        next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon)
+        next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon) || taxon.index("__")
         if taxon != "Undefined" && (!withTree || taxon != "NO_TREE")
           counts[taxon] = 0 if !counts[taxon]
           counts[taxon] += 1
