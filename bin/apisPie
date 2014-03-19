@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.06"
-DATE = "03/04/2014"
+VER = "2.07"
+DATE = "03/19/2014"
 
 $:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
 

@@ -115,7 +115,7 @@ def writeCountsExcel(filename, counts)
     taxa.keys.sort{|x,y| taxa[y]<=>taxa[x]}.each do |taxon|
       row = [taxon]
       counts[level].keys.each do |key|
-        row.push(counts[level][key][taxon])
+        row.push(counts[level][key][taxon].to_i)
       end
       sheet.add_row(row)
     end
