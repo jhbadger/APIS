@@ -18,63 +18,67 @@ defaults = loadDefaults
 
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
-   banner File.basename($0) << " " << VER << " " << DATE
-   opt :database, "Seguid-based timelogic protein database(s)", :type => :strings, :default=>[defaults["timedb"]]
-   opt :evalue, "maximum evalue for blast hit to be counted", :default=>1e-9, :type => :float
-   opt :input, "DNA/Protein input fasta file(s) to process", :required => true, :type => :strings
-   opt :maxhits, "Maximum blast hits per query sequence", :default=>50, :type => :integer
-   opt :user, "timelogic user account", :default=>defaults["timeuser"], :type=>:string
-   opt :password, "timelogic user password", :default=>defaults["timepass"], :type=>:string
-   opt :server, "timelogic server", :default=>defaults["timeserver"], :type=>:string
-   opt :separate, "use separate blast dbs (mito, chloro, etc.)"
-   opt :verbose, "print verbose status messages to STDERR"
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :database, "Seguid-based timelogic protein database(s)", :type => :strings, :default=>[defaults["timedb"]]
+  opt :evalue, "maximum evalue for blast hit to be counted", :default=>1e-9, :type => :float
+  opt :input, "DNA/Protein input fasta file(s) to process", :required => true, :type => :strings
+  opt :maxhits, "Maximum blast hits per query sequence", :default=>50, :type => :integer
+  opt :user, "timelogic user account", :default=>defaults["timeuser"], :type=>:string
+  opt :password, "timelogic user password", :default=>defaults["timepass"], :type=>:string
+  opt :server, "timelogic server", :default=>defaults["timeserver"], :type=>:string
+  opt :separate, "use separate blast dbs (mito, chloro, etc.)"
+  opt :database_size, "Database size if not automatically computed", :type=>:integer
+  opt :verbose, "print verbose status messages to STDERR"
 end
 
 if opts.separate && opts.database.size == 1
-   name = opts.database.first
-   dbs = []
-   ["chloro", "mito", "kegg", "rest", "transcript"].each do |subname|
-      dbs.push(name.gsub("phylodb_nr", "phylodb_#{subname}"))
-   end
+  name = opts.database.first
+  dbs = []
+  ["chloro", "mito", "kegg", "rest", "transcript"].each do |subname|
+    dbs.push(name.gsub("phylodb_nr", "phylodb_#{subname}"))
+  end
 else
-   dbs = opts.database
+  dbs = opts.database
 end
 
 opts.input.each do |fasta|
-   if isDNA?(fasta)
-      input = asProt(fasta, opts.verbose)
-   else
-      input = fasta
-   end
-   blasts = []
-   dbs.each do |db|
-      cmd = "dc_run -parameters tera-blastp -database #{db} "
-      cmd += "-threshold significance=#{opts.evalue} "
-      cmd += "-max_alignments #{opts.maxhits} -max_scores #{opts.maxhits} "
-      cmd += "-query #{input} -user #{opts.user} -password #{opts.password} "
-      cmd += "-server #{opts.server} -output_format tab "
-      cmd += "-field querylocus targetlocus percentalignment "
-      cmd += "alignmentlength matches gaps querystart queryend "
-      cmd += "targetstart targetend significance score targetdescription"
-      fname = File.basename(fasta) + "_vs_" + db + ".m8plus"
+  if isDNA?(fasta)
+    input = asProt(fasta, opts.verbose)
+  else
+    input = fasta
+  end
+  blasts = []
+  dbs.each do |db|
+    cmd = "dc_run -parameters tera-blastp -database #{db} "
+    cmd += "-threshold significance=#{opts.evalue} "
+    cmd += "-max_alignments #{opts.maxhits} -max_scores #{opts.maxhits} "
+    cmd += "-query #{input} -user #{opts.user} -password #{opts.password} "
+    cmd += "-server #{opts.server} -output_format tab "
+    cmd += "-database_size #{opts.database_size} " if opts.database_size 
+    cmd += "-field querylocus targetlocus percentalignment "
+    cmd += "alignmentlength matches gaps querystart queryend "
+    cmd += "targetstart targetend significance score targetdescription"
+    fname = File.basename(fasta) + "_vs_" + db + ".m8plus"
+    if !File.exists?(fname)
       system(cmd + " > " + fname)
       blasts.push(fname)
-   end
-   if blasts.size > 1
-      fname = File.basename(fasta) + "_combined.m8plus"
-      out = File.new(fname, "w")
-      sortCmd = "sort -t $'\t' -k1 -k12 -r -n"
-      counts = Hash.new
-      `#{sortCmd} #{blasts.join(" ")} | sort -u`.split("\n").each do |line|
-         next if line=~/^QUERY/
-         fields = line.chomp.split("\t")
-         name, evalue = fields[0], fields[10].to_f
-         counts[name] = 0 if !counts[name]
-         if (evalue <= opts.evalue && counts[name] < opts.maxhits)
-            out.print line + "\n"
-            counts[name] += 1
-         end
+    end
+  end
+  if blasts.size > 1
+    fname = File.basename(fasta) + "_combined.m8plus"
+    out = File.new(fname, "w")
+    sortCmd = "sort -t $'\t' -k1 -k12 -r -n"
+    counts = Hash.new
+    `#{sortCmd} #{blasts.join(" ")} | sort -u`.split("\n").each do |line|
+      next if line=~/^QUERY/
+      fields = line.chomp.split("\t")
+      name, evalue = fields[0], fields[10].to_f
+      counts[name] = 0 if !counts[name]
+      if (evalue <= opts.evalue && counts[name] < opts.maxhits)
+        out.print line + "\n"
+        counts[name] += 1
       end
-      out.close
-   end
+    end
+    out.close
+  end
 end

@@ -53,6 +53,17 @@ else
   inputs = [STDIN]
 end
 
+class OpenStruct
+  def recurseToHash
+    out = self.marshal_dump
+    out.keys.each do |key|
+      out[key] = out[key].recurseToHash if out[key].class==OpenStruct
+    end
+    out
+  end
+end
+
+
 inputs.each do |input|
   inputf = STDIN
   inputf = ZFile.new(input) if input != STDIN
@@ -62,7 +73,7 @@ inputs.each do |input|
   else
     outfile = STDOUT
   end
-  outfile.print headers.join("\t")+"\n"
+  outfile.print headers.join("\t")+"\n" if opts.apistab
   JsonStreamer.new(inputf).each do |this|
     begin
       this["strict_consensus"]["class_name"]=this["strict_consensus"]["class"]
@@ -77,6 +88,7 @@ inputs.each do |input|
           results = [results] if results.class != "Array" && results.class != "Hash"
           outfile.print results.to_a.join("\t") + "\n"
         elsif output == "json"
+          results = results.recurseToHash if results.class == OpenStruct
           outfile.print results.to_json_pp
         end
       end

@@ -1,3 +1,4 @@
+
 # helper functions
 
 
@@ -126,7 +127,11 @@ end
 
 # returns true if file likely to be DNA, false otherwise
 def isDNA?(fasta)
+  begin
    seq = File.read(fasta, 10000).split("\n").grep(/^[^>]/).join
+  rescue
+    seq = File.read(fasta).split("\n").grep(/^[^>]/).join
+  end
    seq.count("AGTCN").to_f / seq.length > 0.90
 end
 
@@ -200,17 +205,21 @@ class Array # additional methods for Array class
 end
 
 # get taxonomy array (or string) for taxon
-def getTaxonomy(taxon, taxonomy, joined=false)
+ def getTaxonomy(taxon, taxonomy, joined=false, warn = false)
    seqid, sp = taxon.split("__")
+   sp = sp.to_s
    tx=taxonomy[sp]
+   tx=taxonomy[sp.gsub(/sp[\.]*_/, "")] if tx.nil?
+   tx=taxonomy[sp.gsub(/Strain_/i, "")] if tx.nil?
    if tx.nil?
+     STDERR << "No taxonomy found for #{sp}...\n" if warn
       nil
    elsif joined
-      return tx.join("; ")
+     return tx.join("; ")
    else
-      tx
+     tx
    end
-end
+ end
 
 class NewickNode # additional methods for NewickNode class
    # return array of arrays of taxa representing relatives at each level
@@ -225,29 +234,29 @@ class NewickNode # additional methods for NewickNode class
    end
 
    # returns array of consensus taxonomy at each relative level of tree
-   def consensusTax(taxonomy)
-      strict = []
-      relaxed = []
-      rels = relatives
-      return  [] if rels.nil?
-      rels.each do |list|
-         counts = []
-         list.each do |relative|
-            groups = getTaxonomy(relative, taxonomy)
-            next if groups.nil?
-            groups.size.times do |i|
-               counts[i] = Hash.new if counts[i].nil?
-               counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
-               counts[i][groups[i]] += 1
-            end
+   def consensusTax(taxonomy, warn = false)
+     strict = []
+     relaxed = []
+     rels = relatives
+     return  [] if rels.nil?
+     rels.each do |list|
+       counts = []
+       list.each do |relative|
+         groups = getTaxonomy(relative, taxonomy, false, warn)
+         next if groups.nil?
+         groups.size.times do |i|
+           counts[i] = Hash.new if counts[i].nil?
+           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+           counts[i][groups[i]] += 1
          end
-         strict.push(counts.absolute)
-         relaxed.push(counts.majority)
-      end
-      {"strict"=>strict, "relaxed"=>relaxed}
+       end
+       strict.push(counts.absolute)
+       relaxed.push(counts.majority)
+     end
+     {"strict"=>strict, "relaxed"=>relaxed}
    end
-end
-
+ end
+ 
 
 # routine to merge multiple blast files and sort by query seq and evalue
 def mergeBlasts(blast, dataset, opts)
@@ -311,10 +320,10 @@ end
 
 class NewickTree # Additional methods for NewickTree class
    # returns classification of node based on taxonomy
-   def classify(pid, exclude, taxonomy)
+   def classify(pid, exclude, taxonomy, warn = false)
       node = findNode(pid)
       return nil if node.nil?
-      cons = node.consensusTax(taxonomy)
+      cons = node.consensusTax(taxonomy, warn)
       {"strict" => consensus2classification(cons["strict"], exclude, taxonomy),
       "relaxed" => consensus2classification(cons["relaxed"], exclude, taxonomy)}
    end

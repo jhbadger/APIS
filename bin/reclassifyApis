@@ -1,0 +1,80 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+VER = "1.0"
+DATE = "10/17/2014"
+
+require 'bio'
+require 'trollop'
+require 'Newick'
+require 'ostruct'
+require 'yajl'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+require "ZFile"
+
+# load apis_conf.json defaults from current, home, or APIS directory
+defaults = loadDefaults
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :databases, "Seguid-based fastacmd indexed protein database", :type => :strings, :default=>[defaults["database"]]
+  opt :exclude, "taxa to exclude in classification", :type => :strings
+  opt :input, "apis json file to process", :required => true, :type => :string
+  opt :annotate, "Provide phylogenomic annotation"
+  opt :taxonomies, "APIS usedTaxa file(s)", :type => :strings, :default=>[defaults["taxonomy"]]
+  opt :patch, "optional patch file for taxonomies", :type=>:string
+  opt :verbose, "print verbose status messages to STDERR"
+end
+
+if !opts.databases.first || !opts.taxonomies.first
+  STDERR << "Both a database and taxonomy need to be specified\n"
+  exit(1)
+end
+
+taxonomy, tax_ids = loadTaxonomy(opts.taxonomies, opts.verbose)
+
+if opts.patch
+  File.new(opts.patch).each do |line|
+    tid, old, cur = line.chomp.split("\t")
+    tax_ids[old] = tid
+    old = old.tr("(),:","").gsub(" ","_")
+    cur = cur.tr("(),:","").gsub(" ","_")
+    if taxonomy[cur]
+      taxonomy[old] = taxonomy[cur]
+    end
+  end
+end
+
+dataset = opts.input.split("_apis").first
+out = File.new(dataset + "_reclassify.json", "w")
+  
+# main loop
+
+JsonStreamer.new(ZFile.new(opts.input)).each do |this|
+  if this["tree"] != "NO_TREE"
+    tree = NewickTree.new(this["tree"])
+    classy = tree.classify(this["name"], opts.exclude, taxonomy, opts.verbose)
+    ann = tree.annotate(this[name], functHash) if opts.annotate
+    staxid, stax = findBestTaxId(classy["strict"], tax_ids)
+    rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
+    if staxid.to_i !=this["strict_taxon_id"]
+      STDERR << this["name"] << "\t" << this["strict_taxon_id"] << "\t"
+      STDERR << this["strict_taxon"] << "\t"
+      STDERR << rtaxid << "\t" << rtax << "\n"
+    end
+    this["annotation"] = ann if opts.annotate
+    this["strict_taxon_id"] = staxid.to_i
+    this["relaxed_taxon_id"] = rtaxid.to_i
+    this["strict_consensus"]=classy["strict"]
+    this["relaxed_consensus"]=classy["relaxed"]
+    this["strict_consensus"]=classy["strict"]
+    this["strict_taxon"]=stax
+    this["relaxed_taxon"]=rtax
+  end
+  out << this.to_json_pp
+end
+
