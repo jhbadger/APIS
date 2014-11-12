@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "1.0"
-DATE = "10/17/2014"
+VER = "1.1"
+DATE = "11/12/2014"
 
 require 'bio'
 require 'trollop'
@@ -60,17 +60,28 @@ JsonStreamer.new(ZFile.new(opts.input)).each do |this|
     ann = tree.annotate(this[name], functHash) if opts.annotate
     staxid, stax = findBestTaxId(classy["strict"], tax_ids)
     rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
-    if staxid.to_i == 0
+    if stax == "Mixed"
       classy = tree.classify(this["name"], opts.exclude, taxonomy, 
                              opts.verbose, true)
       ann = tree.annotate(this[name], functHash) if opts.annotate
       staxid, stax = findBestTaxId(classy["strict"], tax_ids)
       rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
     end
-    if staxid.to_i !=this["strict_taxon_id"]
-      STDERR << this["name"] << "\t" << this["strict_taxon_id"] << "\t"
-      STDERR << this["strict_taxon"] << "\t"
-      STDERR << rtaxid << "\t" << rtax << "\n"
+    if rtaxid.to_i !=this["relaxed_taxon_id"].to_i && rtax != this["relaxed_taxon"]
+      n1 = this["relaxed_consensus"].keys.index(this["relaxed_consensus"].key("Mixed"))
+      n2 = classy["relaxed"].keys.index(classy["relaxed"].key("Mixed"))
+      n1 = 100 if n1.nil?
+      n2 = 100 if n2.nil?
+      STDERR << this["name"] << "\t" << this["relaxed_taxon_id"] << "\t"
+      STDERR << this["relaxed_taxon"] << "\t"
+      STDERR << rtaxid << "\t" << rtax << "\t"
+      if n2 > n1
+        STDERR << "More Specific\n"
+      elsif n1 > n2
+        STDERR << "Less Specific\n"
+      else
+        STDERR << "Equally Specific\n"
+      end
     end
     this["annotation"] = ann if opts.annotate
     this["strict_taxon_id"] = staxid.to_i
