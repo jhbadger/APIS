@@ -21,7 +21,6 @@ defaults = loadDefaults
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
   banner File.basename($0) << " " << VER << " " << DATE
-  opt :databases, "Seguid-based fastacmd indexed protein database", :type => :strings, :default=>[defaults["database"]]
   opt :exclude, "taxa to exclude in classification", :type => :strings
   opt :input, "apis json file to process", :required => true, :type => :string
   opt :annotate, "Provide phylogenomic annotation"
@@ -30,8 +29,8 @@ opts = Trollop::options do
   opt :verbose, "print verbose status messages to STDERR"
 end
 
-if !opts.databases.first || !opts.taxonomies.first
-  STDERR << "Both a database and taxonomy need to be specified\n"
+if !opts.taxonomies.first
+  STDERR << "A taxonomy needs to be specified\n"
   exit(1)
 end
 
@@ -61,6 +60,13 @@ JsonStreamer.new(ZFile.new(opts.input)).each do |this|
     ann = tree.annotate(this[name], functHash) if opts.annotate
     staxid, stax = findBestTaxId(classy["strict"], tax_ids)
     rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
+    if staxid.to_i == 0
+      classy = tree.classify(this["name"], opts.exclude, taxonomy, 
+                             opts.verbose, true)
+      ann = tree.annotate(this[name], functHash) if opts.annotate
+      staxid, stax = findBestTaxId(classy["strict"], tax_ids)
+      rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
+    end
     if staxid.to_i !=this["strict_taxon_id"]
       STDERR << this["name"] << "\t" << this["strict_taxon_id"] << "\t"
       STDERR << this["strict_taxon"] << "\t"

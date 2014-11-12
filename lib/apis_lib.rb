@@ -1,327 +1,328 @@
 
-# helper functions
+ # helper functions
 
 
-# load apis.conf defaults from current, home, or APIS directory
-def loadDefaults
-   defaults = Hash.new
-   if File.exists?("apis_conf.json")
-      conf = "apis_conf.json"
-   elsif File.exists?(ENV["HOME"]+"/apis_conf.json")
-      conf = ENV["HOME"]+"/apis_conf.json"
-   elsif File.exists?(File.dirname($0)+"/apis_conf.json")
-      conf = File.dirname($0)+"/apis_conf.json"
-   else
-      conf = nil
-   end
-   if conf
-      json = File.new(conf)
-      parser = Yajl::Parser.new
-      defaults = parser.parse(json)
-      json.close
-   end
-   defaults
-end
-
-# return hashes of percentages and counts for use in apis pie chart
-def pieProcess(file, dataset, format, level, withTree)
-  counts = Hash.new
-  total = 0
-  if format == "json"
-    JsonStreamer.new(ZFile.new(file)).each do |obj|
-      if (opts.relaxed)
-        consensus = obj["relaxed_consensus"]
-      else
-        consensus = obj["strict_consensus"]
-      end
-      taxon = consensus[level]
-      next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon)
-      taxon = "Unclassified" if taxon == "Undefined" || taxon == "NO_TREE" || taxon == "Unknown" || taxon.index("__")
-      if taxon != "Unclassified" || !withTree
-        counts[taxon] = 0 if !counts[taxon]
-        counts[taxon] += 1
-        total += 1
-      end
+ # load apis.conf defaults from current, home, or APIS directory
+ def loadDefaults
+    defaults = Hash.new
+    if File.exists?("apis_conf.json")
+       conf = "apis_conf.json"
+    elsif File.exists?(ENV["HOME"]+"/apis_conf.json")
+       conf = ENV["HOME"]+"/apis_conf.json"
+    elsif File.exists?(File.dirname($0)+"/apis_conf.json")
+       conf = File.dirname($0)+"/apis_conf.json"
+    else
+       conf = nil
     end
-  else
-    headers = nil
-    ZFile.new(file).each do |line|
-      if headers.nil?
-        headers = line.downcase.chomp.split("\t")
-      else
-        fields = line.chomp.split("\t")
-        taxon = fields[headers.index(level)]
-        taxon = "Unclassified" if taxon == "Undefined" || taxon == "NO_TREE" || taxon == "Unknown" || taxon.index("__")
-        if taxon != "Unclassified" || !withTree
-          counts[taxon] = 0 if !counts[taxon]
-          counts[taxon] += 1
-          total += 1
-        end
-      end
+    if conf
+       json = File.new(conf)
+       parser = Yajl::Parser.new
+       defaults = parser.parse(json)
+       json.close
     end
-  end
-  percents = Hash.new
-  counts.keys.each do |key|
-    percents[key] = 100*counts[key]/total.to_f
-  end
-  [percents, counts]
-end
-
-# collect catefgories less than miscmin % as "Misc"
-def collectMisc(percents, level, miscmin)
-  percents["Misc"] = 0
-  keys = percents.keys
-  keys.each do |key|
-    if (percents[key] < miscmin && key != "Misc" && level != "kingdom")
-      percents["Misc"] += percents[key]
-      percents.delete(key)
-    end
-  end
-  percents.delete("Misc") if  percents["Misc"] && percents["Misc"] < 2
-  percents
-end
-
-# produce hash of color hex codes for use for consistent colors across pie taxa
-def getPieColors(taxa)
-  colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
-            "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B",
-            "#B58AA5","#CECFCE","#005B9A","#0191C8","#74C2E1",
-            "#8C8984","#E8D0A9","#B7AFA3","#727B84","#DF9496",
-            "#00008B", "#0000CD", "#0000FF", "#006400", "#008000",
-            "#008000", "#008080", "#008B8B", "#00BFFF", "#00CED1",
-            "#F5FFFA", "#F8F8FF", "#FA8072" "#FAEBD7", "#FAF0E6",
-            "#FAFAD2", "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B"]
-  colors *= 5 # provide duplicates of colors to stop running out
-  colorTaxa = Hash.new
-  taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each do |taxon|
-    colorTaxa[taxon] = colors.shift if (colors.size > 0)
-  end
-  colorTaxa
-end
-
-# write Excel file of counts
-def writeCountsExcel(filename, counts)
-  require 'axlsx'
-  proj = Axlsx::Package.new
-  wb = proj.workbook
-  counts.keys.each do |level|
-    taxa = Hash.new
-    counts[level].keys.each do |key|
-      counts[level][key].keys.each do |taxon|
-        taxa[taxon] = 0 if !taxa[taxon]
-        taxa[taxon] += counts[level][key][taxon]
-      end
-    end
-    sheet = wb.add_worksheet(:name=>level)
-    sheet.add_row([""]+counts[level].keys)
-    taxa.keys.sort{|x,y| taxa[y]<=>taxa[x]}.each do |taxon|
-      row = [taxon]
-      counts[level].keys.each do |key|
-        row.push(counts[level][key][taxon].to_i)
-      end
-      sheet.add_row(row)
-    end
-  end
-  proj.serialize(filename)
-end
-
-# returns true if file likely to be DNA, false otherwise
-def isDNA?(fasta)
-  begin
-   seq = File.read(fasta, 10000).split("\n").grep(/^[^>]/).join
-  rescue
-    seq = File.read(fasta).split("\n").grep(/^[^>]/).join
-  end
-   seq.count("AGTCN").to_f / seq.length > 0.90
-end
-
-# returns species from phylodb-formattted string
-def headerSpecies(header)
-   begin
-      header.split("{")[1].split("}")[0].split("||")[0].tr("(),:","").tr(" ","_")
-   rescue
-      ""
-   end
-end
-
-# returns pure seguid from phylodb-formatted string
-def headerSeguid(header)
-   begin
-      header.gsub(">","").gsub("lcl|","").split(" ")[0]
-   rescue
-      ""
-   end
-end
-
-#returns first word from header
-def headerName(header)
-   begin
-      header.split(" ")[0]
-   rescue
-      ""
-   end
-end
-
-def headerFunction(header)
-   begin
-      seqid, ann = header.split(" ", 2)
-      ann = ann.to_s.split("\<\<")[1].split("\>\>")[0].split("||")[0]
-      ann
-   rescue
-      ""
-   end
-end
-
-class Array # additional methods for Array class
-   # return majority consensus for counts array
-   def majority
-      consensus = []
-      size.times do |i|
-         total = 0.0
-         self[i].values.each{|val|total+=val}
-         name = self[i].keys.sort {|x,y| self[i][y] <=> self[i][x]}.first
-
-         if (self[i][name]/total > 0.5)
-            consensus[i] = name
-         else
-            consensus[i] = "Mixed"
-         end
-      end
-      return consensus
-   end
-
-   # return absolute consensus for counts array
-   def absolute
-      consensus = []
-      size.times do |i|
-         if (self[i].size == 1)
-            consensus.push(self[i].keys.first)
-         else
-            consensus.push("Mixed")
-         end
-      end
-      return consensus
-   end
-end
-
-# get taxonomy array (or string) for taxon
- def getTaxonomy(taxon, taxonomy, joined=false, warn = false)
-   seqid, sp = taxon.split("__")
-   sp = sp.to_s
-   tx=taxonomy[sp]
-   tx=taxonomy[sp.gsub(/sp[\.]*_/, "")] if tx.nil?
-   tx=taxonomy[sp.gsub(/Strain_/i, "")] if tx.nil?
-   if tx.nil?
-     STDERR << "No taxonomy found for #{sp}...\n" if warn
-      nil
-   elsif joined
-     return tx.join("; ")
-   else
-     tx
-   end
+    defaults
  end
 
-class NewickNode # additional methods for NewickNode class
-   # return array of arrays of taxa representing relatives at each level
-   def relatives
-      relatives = []
-      node = self
-      while(!node.nil? && !node.parent.nil?)
-         relatives.push(node.parent.taxa - node.taxa)
-         node = node.parent
-      end
-      return relatives
-   end
-
-   # returns array of consensus taxonomy at each relative level of tree
-   def consensusTax(taxonomy, warn = false)
-     strict = []
-     relaxed = []
-     rels = relatives
-     return  [] if rels.nil?
-     rels.each do |list|
-       counts = []
-       list.each do |relative|
-         groups = getTaxonomy(relative, taxonomy, false, warn)
-         next if groups.nil?
-         groups.size.times do |i|
-           counts[i] = Hash.new if counts[i].nil?
-           counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
-           counts[i][groups[i]] += 1
+ # return hashes of percentages and counts for use in apis pie chart
+ def pieProcess(file, dataset, format, level, withTree)
+   counts = Hash.new
+   total = 0
+   if format == "json"
+     JsonStreamer.new(ZFile.new(file)).each do |obj|
+       if (opts.relaxed)
+         consensus = obj["relaxed_consensus"]
+       else
+         consensus = obj["strict_consensus"]
+       end
+       taxon = consensus[level]
+       next if level == "kingdom" && !["Eukaryota", "Bacteria", "Archaea", "Viruses"].include?(taxon)
+       taxon = "Unclassified" if taxon == "Undefined" || taxon == "NO_TREE" || taxon == "Unknown" || taxon.index("__")
+       if taxon != "Unclassified" || !withTree
+         counts[taxon] = 0 if !counts[taxon]
+         counts[taxon] += 1
+         total += 1
+       end
+     end
+   else
+     headers = nil
+     ZFile.new(file).each do |line|
+       if headers.nil?
+         headers = line.downcase.chomp.split("\t")
+       else
+         fields = line.chomp.split("\t")
+         taxon = fields[headers.index(level)]
+         taxon = "Unclassified" if taxon == "Undefined" || taxon == "NO_TREE" || taxon == "Unknown" || taxon.index("__")
+         if taxon != "Unclassified" || !withTree
+           counts[taxon] = 0 if !counts[taxon]
+           counts[taxon] += 1
+           total += 1
          end
        end
-       strict.push(counts.absolute)
-       relaxed.push(counts.majority)
      end
-     {"strict"=>strict, "relaxed"=>relaxed}
    end
+   percents = Hash.new
+   counts.keys.each do |key|
+     percents[key] = 100*counts[key]/total.to_f
+   end
+   [percents, counts]
  end
- 
 
-# routine to merge multiple blast files and sort by query seq and evalue
-def mergeBlasts(blast, dataset, opts)
-   STDERR << "Merging blasts...\n" if opts.verbose
-   sortCmd = "sort -t $'\t' -k1,1 -k12,12rn"
-   mBlastFile = dataset + "_merged.blast"
+ # collect catefgories less than miscmin % as "Misc"
+ def collectMisc(percents, level, miscmin)
+   percents["Misc"] = 0
+   keys = percents.keys
+   keys.each do |key|
+     if (percents[key] < miscmin && key != "Misc" && level != "kingdom")
+       percents["Misc"] += percents[key]
+       percents.delete(key)
+     end
+   end
+   percents.delete("Misc") if  percents["Misc"] && percents["Misc"] < 2
+   percents
+ end
 
-   out = File.new(mBlastFile, "w")
-   counts = Hash.new
-   `#{sortCmd} #{blast.join(" ")} | uniq`.split("\n").each do |line|
-      next if line=~/^QUERY/
-      fields = line.chomp.split("\t")
-      name, evalue = fields[0], fields[10].to_f
-      counts[name] = 0 if !counts[name]
-      if (evalue <= opts.evalue && counts[name] < opts.maxhits)
-         out.print line + "\n"
-         counts[name] += 1
+ # produce hash of color hex codes for use for consistent colors across pie taxa
+ def getPieColors(taxa)
+   colors = ["#90B8C0","#988CA0","#FF9999","#99FF99","#CE0000",
+             "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B",
+             "#B58AA5","#CECFCE","#005B9A","#0191C8","#74C2E1",
+             "#8C8984","#E8D0A9","#B7AFA3","#727B84","#DF9496",
+             "#00008B", "#0000CD", "#0000FF", "#006400", "#008000",
+             "#008000", "#008080", "#008B8B", "#00BFFF", "#00CED1",
+             "#F5FFFA", "#F8F8FF", "#FA8072" "#FAEBD7", "#FAF0E6",
+             "#FAFAD2", "#000063","#5A79A5","#9CAAC6","#DEE7EF","#84596B"]
+   colors *= 5 # provide duplicates of colors to stop running out
+   colorTaxa = Hash.new
+   taxa.keys.sort {|x,y| taxa[y] <=> taxa[x]}.each do |taxon|
+     colorTaxa[taxon] = colors.shift if (colors.size > 0)
+   end
+   colorTaxa
+ end
+
+ # write Excel file of counts
+ def writeCountsExcel(filename, counts)
+   require 'axlsx'
+   proj = Axlsx::Package.new
+   wb = proj.workbook
+   counts.keys.each do |level|
+     taxa = Hash.new
+     counts[level].keys.each do |key|
+       counts[level][key].keys.each do |taxon|
+         taxa[taxon] = 0 if !taxa[taxon]
+         taxa[taxon] += counts[level][key][taxon]
+       end
+     end
+     sheet = wb.add_worksheet(:name=>level)
+     sheet.add_row([""]+counts[level].keys)
+     taxa.keys.sort{|x,y| taxa[y]<=>taxa[x]}.each do |taxon|
+       row = [taxon]
+       counts[level].keys.each do |key|
+         row.push(counts[level][key][taxon].to_i)
+       end
+       sheet.add_row(row)
+     end
+   end
+   proj.serialize(filename)
+ end
+
+ # returns true if file likely to be DNA, false otherwise
+ def isDNA?(fasta)
+   begin
+    seq = File.read(fasta, 10000).split("\n").grep(/^[^>]/).join
+   rescue
+     seq = File.read(fasta).split("\n").grep(/^[^>]/).join
+   end
+    seq.count("AGTCN").to_f / seq.length > 0.90
+ end
+
+ # returns species from phylodb-formattted string
+ def headerSpecies(header)
+    begin
+       header.split("{")[1].split("}")[0].split("||")[0].tr("(),:","").tr(" ","_")
+    rescue
+       ""
+    end
+ end
+
+ # returns pure seguid from phylodb-formatted string
+ def headerSeguid(header)
+    begin
+       header.gsub(">","").gsub("lcl|","").split(" ")[0]
+    rescue
+       ""
+    end
+ end
+
+ #returns first word from header
+ def headerName(header)
+    begin
+       header.split(" ")[0]
+    rescue
+       ""
+    end
+ end
+
+ def headerFunction(header)
+    begin
+       seqid, ann = header.split(" ", 2)
+       ann = ann.to_s.split("\<\<")[1].split("\>\>")[0].split("||")[0]
+       ann
+    rescue
+       ""
+    end
+ end
+
+ class Array # additional methods for Array class
+    # return majority consensus for counts array
+    def majority
+       consensus = []
+       size.times do |i|
+          total = 0.0
+          self[i].values.each{|val|total+=val}
+          name = self[i].keys.sort {|x,y| self[i][y] <=> self[i][x]}.first
+
+          if (self[i][name]/total > 0.5)
+             consensus[i] = name
+          else
+             consensus[i] = "Mixed"
+          end
+       end
+       return consensus
+    end
+
+    # return absolute consensus for counts array
+    def absolute
+       consensus = []
+       size.times do |i|
+          if (self[i].size == 1)
+             consensus.push(self[i].keys.first)
+          else
+             consensus.push("Mixed")
+          end
+       end
+       return consensus
+    end
+ end
+
+ # get taxonomy array (or string) for taxon
+  def getTaxonomy(taxon, taxonomy, joined=false, warn = false)
+    seqid, sp = taxon.split("__")
+    sp = sp.to_s
+    tx=taxonomy[sp]
+    tx=taxonomy[sp.gsub(/sp[\.]*_/, "")] if tx.nil?
+    tx=taxonomy[sp.gsub(/Strain_/i, "")] if tx.nil?
+    if tx.nil?
+      STDERR << "No taxonomy found for #{sp}...\n" if warn
+       nil
+    elsif joined
+      return tx.join("; ")
+    else
+      tx
+    end
+  end
+
+ class NewickNode # additional methods for NewickNode class
+    # return array of arrays of taxa representing relatives at each level
+    def relatives
+       relatives = []
+       node = self
+       while(!node.nil? && !node.parent.nil?)
+          relatives.push(node.parent.taxa - node.taxa)
+          node = node.parent
+       end
+       return relatives
+    end
+
+    # returns array of consensus taxonomy at each relative level of tree
+    def consensusTax(taxonomy, warn = false)
+      strict = []
+      relaxed = []
+      rels = relatives
+      return  [] if rels.nil?
+      rels.each do |list|
+        counts = []
+        list.each do |relative|
+          groups = getTaxonomy(relative, taxonomy, false, warn)
+          next if groups.nil?
+          groups.size.times do |i|
+            counts[i] = Hash.new if counts[i].nil?
+            counts[i][groups[i]] = 0 if counts[i][groups[i]].nil?
+            counts[i][groups[i]] += 1
+          end
+        end
+        strict.push(counts.absolute)
+        relaxed.push(counts.majority)
       end
-   end
-   out.close
-   mBlastFile
-end
+      {"strict"=>strict, "relaxed"=>relaxed}
+    end
+  end
 
 
-# creates classificatrion hash for consensus from node
-def consensus2classification(consensus, exclude, taxonomy)
-   lines = []
-   consensus.each do |line|
-      excluded = false
-      excluded = exclude.to_a.collect{|x| line.grep(/#{x}/)}.flatten
-      lines.push(line) if excluded.empty?
-   end
-   first = lines[0]
-   first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
-   if (lines[1].nil?)
-      second = nil
-   else
-      second = lines[1]
-   end
-   mixed = false
-   classification = []
-   7.times do |level|
-      mixed = true if first[level] == "Mixed"
-      first[level] = "Mixed" if mixed
-      if (first[level] == "Mixed" || second.nil? || first[level] == second[level])
-         outgroup = 0
-      else
-         outgroup = 1
-      end
-      first[level] = "Undefined" if first[level].nil?
-      classification.push(first[level])
-      classification.push(outgroup)
-   end
-   chash = Hash.new
-   ["kingdom", "phylum", "class", "order", "family", "genus", "species"].each do |rank|
-      chash[rank] = classification.shift
-      chash[rank + "_outgroup"] = classification.shift
-   end
-   chash
-end
+ # routine to merge multiple blast files and sort by query seq and evalue
+ def mergeBlasts(blast, dataset, opts)
+    STDERR << "Merging blasts...\n" if opts.verbose
+    sortCmd = "sort -t $'\t' -k1,1 -k12,12rn"
+    mBlastFile = dataset + "_merged.blast"
 
-class NewickTree # Additional methods for NewickTree class
-   # returns classification of node based on taxonomy
-   def classify(pid, exclude, taxonomy, warn = false)
+    out = File.new(mBlastFile, "w")
+    counts = Hash.new
+    `#{sortCmd} #{blast.join(" ")} | uniq`.split("\n").each do |line|
+       next if line=~/^QUERY/
+       fields = line.chomp.split("\t")
+       name, evalue = fields[0], fields[10].to_f
+       counts[name] = 0 if !counts[name]
+       if (evalue <= opts.evalue && counts[name] < opts.maxhits)
+          out.print line + "\n"
+          counts[name] += 1
+       end
+    end
+    out.close
+    mBlastFile
+ end
+
+
+ # creates classificatrion hash for consensus from node
+ def consensus2classification(consensus, exclude, taxonomy)
+    lines = []
+    consensus.each do |line|
+       excluded = false
+       excluded = exclude.to_a.collect{|x| line.grep(/#{x}/)}.flatten
+       lines.push(line) if excluded.empty?
+    end
+    first = lines[0]
+    first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
+    if (lines[1].nil?)
+       second = nil
+    else
+       second = lines[1]
+    end
+    mixed = false
+    classification = []
+    7.times do |level|
+       mixed = true if first[level] == "Mixed"
+       first[level] = "Mixed" if mixed
+       if (first[level] == "Mixed" || second.nil? || first[level] == second[level])
+          outgroup = 0
+       else
+          outgroup = 1
+       end
+       first[level] = "Undefined" if first[level].nil?
+       classification.push(first[level])
+       classification.push(outgroup)
+    end
+    chash = Hash.new
+    ["kingdom", "phylum", "class", "order", "family", "genus", "species"].each do |rank|
+       chash[rank] = classification.shift
+       chash[rank + "_outgroup"] = classification.shift
+    end
+    chash
+ end
+
+ class NewickTree # Additional methods for NewickTree class
+    # returns classification of node based on taxonomy
+    def classify(pid, exclude, taxonomy, warn = false, parent = false)
       node = findNode(pid)
+      node = node.parent if node && parent
       return nil if node.nil?
       cons = node.consensusTax(taxonomy, warn)
       {"strict" => consensus2classification(cons["strict"], exclude, taxonomy),
