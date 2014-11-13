@@ -77,13 +77,13 @@ JsonStreamer.new(ZFile.new(opts.input)).each do |this|
       end
     end
     this["annotation"] = ann if opts.annotate
-    this["strict_taxon_id"] = staxid.to_i
-    this["relaxed_taxon_id"] = rtaxid.to_i
+    this["strict_taxon_id"] = staxid.to_i if staxid.to_i != 0
+    this["relaxed_taxon_id"] = rtaxid.to_i if rtaxid.to_i != 0
     this["strict_consensus"]=classy["strict"]
     this["relaxed_consensus"]=classy["relaxed"]
     this["strict_consensus"]=classy["strict"]
-    this["strict_taxon"]=stax
-    this["relaxed_taxon"]=rtax
+    this["strict_taxon"]=stax if !stax.nil?
+    this["relaxed_taxon"]=rtax if !rtax.nil?
   end
   out << this.to_json_pp
 end
