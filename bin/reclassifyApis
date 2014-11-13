@@ -60,13 +60,6 @@ JsonStreamer.new(ZFile.new(opts.input)).each do |this|
     ann = tree.annotate(this[name], functHash) if opts.annotate
     staxid, stax = findBestTaxId(classy["strict"], tax_ids)
     rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
-    if stax == "Mixed"
-      classy = tree.classify(this["name"], opts.exclude, taxonomy, 
-                             opts.verbose, true)
-      ann = tree.annotate(this[name], functHash) if opts.annotate
-      staxid, stax = findBestTaxId(classy["strict"], tax_ids)
-      rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
-    end
     if rtaxid.to_i !=this["relaxed_taxon_id"].to_i && rtax != this["relaxed_taxon"]
       n1 = this["relaxed_consensus"].keys.index(this["relaxed_consensus"].key("Mixed"))
       n2 = classy["relaxed"].keys.index(classy["relaxed"].key("Mixed"))

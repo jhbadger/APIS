@@ -289,6 +289,9 @@
        excluded = exclude.to_a.collect{|x| line.grep(/#{x}/)}.flatten
        lines.push(line) if excluded.empty?
     end
+   while lines.first == []
+     lines.shift
+   end
     first = lines[0]
     first=[nil,nil,nil,nil,nil,nil,nil] if first.nil?
     if (lines[1].nil?)
