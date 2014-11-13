@@ -1,0 +1,39 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+VER = "1.0"
+DATE = "11/13/2014"
+
+require 'trollop'
+require 'yajl'
+require 'ZFile'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+require "ZFile"
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :input, "input file", :type => :string, :required=>true
+  opt :bin, "bin size (in records) of each output file", 
+  :type => :integer, :required=>true
+end
+
+count = 0
+outname = File.basename(opts.input).split(".json").first+"_00001"
+outFile = File.new(outname+".json", "w")
+JsonStreamer.new(ZFile.new(opts.input)).each do |this|
+  outFile.print this.to_json_pp
+  count += 1
+  if count % opts.bin == 0
+    outFile.close
+    count = 0
+    outname.succ!
+    outFile = File.new(outname+".json", "w")
+  end
+end
+
+outFile.close if outFile
+
