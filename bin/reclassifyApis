@@ -48,7 +48,7 @@ if opts.patch
   end
 end
 
-dataset = opts.input.split("_apis").first
+dataset = opts.input.split(".json").first
 out = File.new(dataset + "_reclassify.json", "w")
   
 # main loop
