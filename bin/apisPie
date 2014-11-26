@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+i#!/usr/bin/env ruby
 
 $VERBOSE=nil
 VER = "2.07"
@@ -43,7 +43,7 @@ opts.levels.each do |level|
     end
     STDERR.printf("Processing %s for %s...\n", level.capitalize, dataset)
     percents[dataset], counts[level][dataset] = pieProcess(file, dataset, opts.format, level, 
-                          opts.with_tree)
+                                                           opts.with_tree)
     percents[dataset] = collectMisc(percents[dataset], level, opts.miscmin)
     percents[dataset].keys.each do |taxon|
       taxa[taxon] = 0 if taxa[taxon].nil?

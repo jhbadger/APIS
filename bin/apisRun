@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.51"
-DATE = "01/31/2014"
+VER = "2.52"
+DATE = "11/26/2014"
 
 require 'bio'
 require 'trollop'
@@ -67,7 +67,7 @@ else
 end
 
 if !opts.erase
-   runGridApis(opts, dataset, blast)
+  runGridApis(opts, dataset, blast)
 else
   taxonomy, tax_ids = loadTaxonomy(opts.taxonomies, opts.verbose)
   
@@ -91,7 +91,7 @@ else
 
   emptyAPIS = {"kingdom" => "NO_TREE", "phylum" => "NO_TREE", "class" => "NO_TREE",
     "order" => "NO_TREE", "family" => "NO_TREE", "genus" => "NO_TREE", "species" => "NO_TREE"}
-   peps.each do |pep|
+  peps.each do |pep|
     begin
       tree, classy, boot, ann, staxid, stax, rtaxid, rtax  = "NO_TREE",
       {"strict" => emptyAPIS, "relaxed" => emptyAPIS}, nil,nil,nil,nil,nil,nil

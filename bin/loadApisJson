@@ -15,17 +15,17 @@ require "ZFile"
 
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
-   banner File.basename($0) << " " << VER << " " << DATE
-   opt :peptides, "peptides file", :type=>:string, :required=>true
-   opt :dataset, "dataset name", :type=>:string, :required=>true
-   opt :host, "mysql host", :default=>"mysql-lan-pro"
-   opt :storage, "apis storage", :default=>"misc_apis"
-   opt :user, "mysql user", :default=>"apis"
-   opt :password, "mysql password", :default=>"apis_user"
-   opt :ver, "version of phylodb", :type=>:string, :required=>true
-   opt :classification, "apis json", :type=>:string, :required=>true
-   opt :owner, "dataset owner", :type=>:string, :required=>true
-   opt :blast, "blast m8", :type=>:string
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :peptides, "peptides file", :type=>:string, :required=>true
+  opt :dataset, "dataset name", :type=>:string, :required=>true
+  opt :host, "mysql host", :default=>"mysql-lan-pro"
+  opt :storage, "apis storage", :default=>"misc_apis"
+  opt :user, "mysql user", :default=>"apis"
+  opt :password, "mysql password", :default=>"apis_user"
+  opt :ver, "version of phylodb", :type=>:string, :required=>true
+  opt :classification, "apis json", :type=>:string, :required=>true
+  opt :owner, "dataset owner", :type=>:string, :required=>true
+  opt :blast, "blast m8", :type=>:string
 end
 
 out = File.new("dataset.txt", "w")
@@ -37,8 +37,8 @@ out.close
 out = File.new("sequence.txt", "w")
 STDERR << "Writing sequence.txt...\n"
 Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(opts.peptides)).each do |seq|
-   row = [seq.definition.split(" ").first, opts.dataset, seq.seq, 1]
-   out.print row.join("\t") + "\n"
+  row = [seq.definition.split(" ").first, opts.dataset, seq.seq, 1]
+  out.print row.join("\t") + "\n"
 end
 out.close
 
@@ -48,15 +48,15 @@ out2 = File.new("annotation.txt", "w")
 
 STDERR << "Writing trees, classifications...\n"
 JsonStreamer.new(ZFile.new(opts.classification)).each do |record|
-   if record["tree"] != "NO_TREE"
-      tax = record["relaxed_consensus"].values.collect{|x| x.to_s.gsub("_", " ")}
-      row = [record["name"], opts.dataset] + tax
-      out.print row.join("\t") + "\n"
-      row = [record["name"], opts.dataset, record["tree"]]
-      out1.print row.join("\t") + "\n"
-      row = [record["name"], opts.dataset, record["annotation"], "APIS"]
-      out2.print row.join("\t") + "\n"
-   end
+  if record["tree"] != "NO_TREE"
+    tax = record["relaxed_consensus"].values.collect{|x| x.to_s.gsub("_", " ")}
+    row = [record["name"], opts.dataset] + tax
+    out.print row.join("\t") + "\n"
+    row = [record["name"], opts.dataset, record["tree"]]
+    out1.print row.join("\t") + "\n"
+    row = [record["name"], opts.dataset, record["annotation"], "APIS"]
+    out2.print row.join("\t") + "\n"
+  end
 end
 out.close
 out1.close
@@ -64,13 +64,13 @@ out2.close
 system("mysqlimport -L -h #{opts.host} -u #{opts.user} --password=#{opts.password} #{opts.storage} dataset.txt classification.txt tree.txt annotation.txt sequence.txt")
 
 if opts.blast
-   out = File.new("blast.txt","w")
-   ZFile.new(opts.blast).each do |line|
-      query, subject, percentId, d, d, d, qleft, qright, sleft, sright, evalue, score,desc = line.chomp.split("\t")
-      row = [query, opts.dataset, subject, desc, "", qleft, qright, sleft, sright,percentId,"",score,evalue]
-      out.print row.join("\t") + "\n"
-   end
-   out.close
+  out = File.new("blast.txt","w")
+  ZFile.new(opts.blast).each do |line|
+    query, subject, percentId, d, d, d, qleft, qright, sleft, sright, evalue, score,desc = line.chomp.split("\t")
+    row = [query, opts.dataset, subject, desc, "", qleft, qright, sleft, sright,percentId,"",score,evalue]
+    out.print row.join("\t") + "\n"
+  end
+  out.close
   system("mysqlimport -L -h #{opts.host} -u #{opts.user} --password=#{opts.password} #{opts.storage} blast.txt")
 end
 

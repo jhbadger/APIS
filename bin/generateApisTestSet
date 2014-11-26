@@ -16,21 +16,21 @@ defaults = loadDefaults
 
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
-   banner File.basename($0) << " " << VER << " " << DATE
-   opt :blast, "NCBI Blast tab file with seguids", :required =>true, :type => :string
-   opt :database, "Seguid-based fastacmd indexed protein database", :type => :string, :default=>defaults["database"]
-   opt :level, "taxonomic level", :default=> "genus", :type => :string
-   opt :taxonomy, "APIS usedTaxa file", :type => :string, :default=>defaults["taxonomy"]
-   opt :size, "number of peptides per dataset", :default=>1000, :type=>:integer
-   opt :number, "number of datasets to generate", :default=>1, :type=>:integer
-   opt :verbose, "print verbose status messages to STDERR"
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :blast, "NCBI Blast tab file with seguids", :required =>true, :type => :string
+  opt :database, "Seguid-based fastacmd indexed protein database", :type => :string, :default=>defaults["database"]
+  opt :level, "taxonomic level", :default=> "genus", :type => :string
+  opt :taxonomy, "APIS usedTaxa file", :type => :string, :default=>defaults["taxonomy"]
+  opt :size, "number of peptides per dataset", :default=>1000, :type=>:integer
+  opt :number, "number of datasets to generate", :default=>1, :type=>:integer
+  opt :verbose, "print verbose status messages to STDERR"
 end
 
 fieldNames =  ["kingdom","phylum","class","order","family","genus","species"]
 rank = fieldNames.index(opts.level.downcase)
 if !rank
-   STDERR << opts.level.downcase << " is not a valid level\n"
-   exit(1)
+  STDERR << opts.level.downcase << " is not a valid level\n"
+  exit(1)
 end
 
 taxonomy = loadTaxonomy(opts.taxonomy, opts.verbose)
@@ -39,6 +39,6 @@ STDERR << "Counting lines from blast...\n" if opts.verbose
 sids = Hash.new
 
 ZFile.new(opts.blast).each do |line|
-   sid, rest = line.chomp.split("\t")
-   sids[sid] = true
+  sid, rest = line.chomp.split("\t")
+  sids[sid] = true
 end

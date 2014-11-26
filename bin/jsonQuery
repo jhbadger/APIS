@@ -16,14 +16,14 @@ require "ZFile"
 
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
-   banner File.basename($0) << " " << VER << " " << DATE
-   opt :input, "read from file(s) rather than STDIN", :type => :strings
-   opt :query, "query on JSON obj (e.g. \"[this.name] if this.strict_consensus.kingdom=='Bacteria'\")", :type=> :string
-   opt :output, "output format (tab, json)", :type => :string, :default => "tab"
-   opt :apistab, "report apis tab file"
-   opt :separate, "write separate files rather than to STDOUT"
-   opt :tree, "include tree in apis tab"
-   
+  banner File.basename($0) << " " << VER << " " << DATE
+  opt :input, "read from file(s) rather than STDIN", :type => :strings
+  opt :query, "query on JSON obj (e.g. \"[this.name] if this.strict_consensus.kingdom=='Bacteria'\")", :type=> :string
+  opt :output, "output format (tab, json)", :type => :string, :default => "tab"
+  opt :apistab, "report apis tab file"
+  opt :separate, "write separate files rather than to STDOUT"
+  opt :tree, "include tree in apis tab"
+  
 end
 
 Trollop::die :no_such_format unless ["tab", "json"].include?(opts.output)
@@ -34,7 +34,7 @@ if opts.apistab
   query += "]"
   output = "tab"
   headers = ["Name", "Taxon", "Taxon_id", "Annotation", "Kingdom", "Phylum",
-           "Class", "Order", "Family", "Genus", "Species", "Bootstrap"]
+             "Class", "Order", "Family", "Genus", "Species", "Bootstrap"]
   headers.push("Tree") if opts.tree
 else
   query=opts.query
