@@ -941,7 +941,8 @@ def runGridApis(opts, dataset, blast, n = 1000)
   end
   out.close if !out.nil?
   grid.submit(true, !opts.project, opts.verbose, opts.maxlocal)
-  endings = ["afa.json", "apis.json", "error.json"]
+  endings = ["apis.json", "error.json"]
+  endings += ["afa.json"] if opts.savealign
   grid.join(endings, dataset)
   File.unlink(blast) if processed.keys.size > 0
 end

@@ -40,6 +40,7 @@ opts = Trollop::options do
   opt :scan, "scan to first blast hit with peptide"
   opt :verbose, "print verbose status messages to STDERR"
   opt :maxlocal, "maximum number of simultaneous local processes", :default=>4
+  opt :savealign, "save alignments for further use"
 end
 
 if !opts.databases.first || !opts.taxonomies.first
@@ -76,7 +77,11 @@ else
     exit(1)
   end
   
-  afas = File.new(dataset + "_afa.json", "w")
+  if opts.savealign
+    afas = File.new(dataset + "_afa.json", "w")
+  else
+    afas = nil
+  end
   out = File.new(dataset + "_apis.json", "w")
   error = File.new(dataset + "_error.json", "w")
   peps = Bio::FlatFile.new(Bio::FastaFormat, ZFile.new(opts.input))
@@ -89,15 +94,17 @@ else
     bpid, blastLines = blastHits.next
   end
 
-  emptyAPIS = {"kingdom" => "NO_TREE", "phylum" => "NO_TREE", "class" => "NO_TREE",
-    "order" => "NO_TREE", "family" => "NO_TREE", "genus" => "NO_TREE", "species" => "NO_TREE"}
+  emptyAPIS = {"kingdom" => "NO_TREE", "phylum" => "NO_TREE", 
+    "class" => "NO_TREE", "order" => "NO_TREE", "family" => "NO_TREE", 
+    "genus" => "NO_TREE", "species" => "NO_TREE"}
   peps.each do |pep|
     begin
       tree, classy, boot, ann, staxid, stax, rtaxid, rtax  = "NO_TREE",
       {"strict" => emptyAPIS, "relaxed" => emptyAPIS}, nil,nil,nil,nil,nil,nil
       pid = pep.full_id
       if bpid == pid && blastLines.size > 2 # 3 homologs + query is min tree
-        afa, functHash = align(pep, pid, blastLines, opts.databases, opts.tmp, opts.verbose)
+        afa, functHash = align(pep, pid, blastLines, opts.databases, 
+                               opts.tmp, opts.verbose)
         tree = infer(pid, afa, opts.phylo, opts.verbose)
         if tree
           boot = tree.findNode(pid).parent.name
@@ -105,14 +112,18 @@ else
           staxid, stax = findBestTaxId(classy["strict"], tax_ids)
           rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
           ann = tree.annotate(pid, functHash) if opts.annotate
-          afas << {"name" => pid, "alignment" => File.read(afa)}.to_json_pp
-          if (opts.trees)
-            NewickTree.new(tree).draw(opts.trees + "/" + name + ".pdf", boot="width", linker = :segLink)
+          if opts.savealign
+            afas << {"name" => pid, "alignment" => File.read(afa)}.to_json_pp
+          end
+          if opts.trees
+            NewickTree.new(tree).draw(opts.trees + "/" + name + ".pdf", 
+                                      boot="width", linker = :segLink)
           end
           File.unlink(afa)
         end
       end
-      outHash = {"name" => pid, "tree"=>tree.to_s, "strict_consensus"=>classy["strict"],
+      outHash = {"name" => pid, "tree"=>tree.to_s, 
+        "strict_consensus"=>classy["strict"],
         "relaxed_consensus"=>classy["relaxed"]}
       outHash["strict_taxon_id"] = staxid.to_i if staxid
       outHash["strict_taxon"] = stax if stax
@@ -122,13 +133,16 @@ else
       outHash["annotation"] = ann if ann
       out << outHash.to_json_pp
     rescue => detail
-      STDERR << "Error " << detail.message << ": " << detail.backtrace  << "while processing #{pid}. Skipping peptide...\n" if opts.verbose
-      error << {"name" => pid, "error" => detail.message, "backtrace" => detail.backtrace}.to_json_pp
+      STDERR << "Error " << detail.message << ": " << detail.backtrace  << 
+        "while processing #{pid}. Skipping peptide...\n" if opts.verbose
+      error << {"name" => pid, "error" => detail.message, 
+        "backtrace" => detail.backtrace}.to_json_pp
     end
-    bpid, blastLines = blastHits.next if bpid == pid # only skip ahead if peptide & blast match
+    bpid, blastLines = blastHits.next if bpid == pid 
+    # only skip ahead if peptide & blast match
   end
   # close files & cleanup
-  afas.close
+  afas.close if opts.savealign
   out.close
   error.close
   peps.close
