@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "1.1"
-DATE = "11/12/2014"
+VER = "1.2"
+DATE = "1/13/2015"
 
 require 'bio'
 require 'trollop'
@@ -23,7 +23,6 @@ opts = Trollop::options do
   banner File.basename($0) << " " << VER << " " << DATE
   opt :exclude, "taxa to exclude in classification", :type => :strings
   opt :input, "apis json file to process", :required => true, :type => :string
-  opt :annotate, "Provide phylogenomic annotation"
   opt :taxonomies, "APIS usedTaxa file(s)", :type => :strings, :default=>[defaults["taxonomy"]]
   opt :patch, "optional patch file for taxonomies", :type=>:string
   opt :verbose, "print verbose status messages to STDERR"
@@ -57,7 +56,6 @@ JsonStreamer.new(ZFile.new(opts.input)).each do |this|
   if this["tree"] != "NO_TREE"
     tree = NewickTree.new(this["tree"])
     classy = tree.classify(this["name"], opts.exclude, taxonomy, opts.verbose)
-    ann = tree.annotate(this[name], functHash) if opts.annotate
     staxid, stax = findBestTaxId(classy["strict"], tax_ids)
     rtaxid, rtax = findBestTaxId(classy["relaxed"], tax_ids)
     if rtaxid.to_i !=this["relaxed_taxon_id"].to_i && rtax != this["relaxed_taxon"]
