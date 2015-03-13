@@ -2,13 +2,11 @@
 
 $VERBOSE=nil
 VER = "1.2"
-DATE = "02/26/2014"
+DATE = "03/13/2015"
 
 require 'ostruct'
 require 'trollop'
 require 'yajl'
-require 'ZFile'
-
 $:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
 
 require "apis_lib"
