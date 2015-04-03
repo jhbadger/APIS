@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 
 $VERBOSE=nil
-VER = "2.52"
-DATE = "11/26/2014"
+VER = "2.53"
+DATE = "04/01/2015"
 
 require 'bio'
 require 'trollop'
@@ -20,6 +20,7 @@ require "ZFile"
 # load apis_conf.json defaults from current, home, or APIS directory
 defaults = loadDefaults
 
+
 ARGV.push("--help") if ARGV.empty?
 opts = Trollop::options do
   banner File.basename($0) << " " << VER << " " << DATE
@@ -30,6 +31,7 @@ opts = Trollop::options do
   opt :input, "protein input fasta file to process", :required => true, :type => :string
   opt :annotate, "Provide phylogenomic annotation"
   opt :maxhits, "Maximum blast hits per query sequence", :default=>50, :type => :integer
+  opt :ncbi, "use NCBI blast+ on refseq rather than legacy blast"
   opt :taxonomies, "APIS usedTaxa file(s)", :type => :strings, :default=>[defaults["taxonomy"]]
   opt :trees, "create pdf-formatted versions of trees in specified directory", :type => :string
   opt :project, "SGE grid project number", :type => :string
@@ -43,7 +45,7 @@ opts = Trollop::options do
   opt :savealign, "save alignments for further use"
 end
 
-if !opts.databases.first || !opts.taxonomies.first
+if !opts.databases.first || !opts.taxonomies.first || opts.databases.first == "none" || opts.taxonomies.first == "none"
   STDERR << "Both a database and taxonomy need to be specified\n"
   exit(1)
 end
@@ -67,7 +69,8 @@ else
   blast = opts.blasts.first
 end
 
-if !opts.erase
+if 1 == 0
+#if !opts.erase
   runGridApis(opts, dataset, blast)
 else
   taxonomy, tax_ids = loadTaxonomy(opts.taxonomies, opts.verbose)
@@ -104,7 +107,7 @@ else
       pid = pep.full_id
       if bpid == pid && blastLines.size > 2 # 3 homologs + query is min tree
         afa, functHash = align(pep, pid, blastLines, opts.databases, 
-                               opts.tmp, opts.verbose)
+                               opts.tmp, opts.ncbi, opts.verbose)
         tree = infer(pid, afa, opts.phylo, opts.verbose)
         if tree
           boot = tree.findNode(pid).parent.name

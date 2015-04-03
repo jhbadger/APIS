@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+
+require 'trollop'
+require 'net/ftp'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+  opt :sections, "sections to download", :type=>:strings,
+  :default=>["bacteria"]
+end
+
+if `which wget` == ""
+  printf("You need wget for downloading...\n")
+  exit(1)
+else
+  opts.sections.each do |section|
+    `wget  ftp://ftp.ncbi.nlm.nih.gov/refseq/release/bacteria/*.faa*`
+  end
+end
+
+
+
+

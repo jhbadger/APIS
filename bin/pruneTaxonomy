@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+
+require 'trollop'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+  opt :taxonomy, "taxonomy file", :type=>:string, :required=>true
+  opt :fasta, "fasta file with species info", :type=>:string, :required=>true
+  opt :delim, "delimiters around species info", :default=>"[]"
+  opt :valid, "only take valid ranks"
+end
+
+
+def isValid?(rank)
+  ["superkingdom","kingdom", "phylum","class","order","family","genus","species"].index(rank)
+end
+
+
+def recurseTaxonomy(tax, current, seen, valid)
+  name, parent, rank = tax[current]
+  seen[current] = true if !current.nil? && (isValid?(rank) || !valid) 
+  if !(current == 1 || name.nil? || name == "Bacteria" || name == "Eukaryota" || name == "Viruses" || name == "Archaea")
+    recurseTaxonomy(tax, parent, seen, valid)
+  end
+end
+
+
+tax = Hash.new
+tid = Hash.new
+
+STDERR << "Loading taxonomy...\n"
+File.new(opts.taxonomy).each do |line|
+  current, name, parent, rank = line.chomp.split("\t")
+  tax[current.to_i] = [name, parent.to_i, rank]
+  tid[name] = current.to_i
+end
+
+found = Hash.new
+STDERR << "Marking seen...\n"
+File.new(opts.fasta).each do |line|
+  if line =~/^>/
+    begin
+      sp = line[1+line.rindex(opts.delim[0])..line.rindex(opts.delim[1])-1]
+      found[sp] = true
+    rescue
+      STDERR << "Can't parse: " << line
+    end
+  end
+end
+
+seen = Hash.new
+found.keys.each do |sp|
+   recurseTaxonomy(tax,tid[sp], seen, opts.valid)
+end
+
+out = File.new(File.basename(opts.taxonomy,".txt")+"_pruned.txt", "w")
+seen.keys.sort.each do |tid|
+  out.print ([tid] + tax[tid]).join("\t")+"\n"
+end
+out.close

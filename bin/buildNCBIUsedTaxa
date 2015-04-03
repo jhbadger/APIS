@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+
+$VERBOSE=nil
+
+require 'trollop'
+
+$:.unshift File.dirname(File.expand_path($0)).gsub("bin", "lib") # include lib directory in load path
+
+require "apis_lib"
+
+ARGV.push("--help") if ARGV.empty?
+opts = Trollop::options do
+  opt :tarfile, "taxdump.tar.gz ncbi taxonomy dump", :type=>:string, :required=>true
+end
+
+make_ncbi_taxonomy(opts.tarfile)

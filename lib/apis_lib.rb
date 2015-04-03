@@ -20,6 +20,9 @@ def loadDefaults
     defaults = parser.parse(json)
     json.close
   end
+  defaults["database"] = "none" if !defaults["database"]
+  defaults["taxonomy"] = "none" if !defaults["taxonomy"]
+  defaults["timedb"] = "none" if !defaults["timedb"]
   defaults
 end
 
@@ -136,18 +139,29 @@ def isDNA?(fasta)
 end
 
 # returns species from phylodb-formattted string
-def headerSpecies(header)
+def headerSpecies(header, ncbi)
   begin
-    header.split("{")[1].split("}")[0].split("||")[0].tr("(),:","").tr(" ","_")
+    if ncbi
+      s = "["
+      e = "]"
+    else
+      s = "{"
+      e = "}"
+    end
+    header.split(s)[1].split(e)[0].split("||")[0].tr("(),:","").tr(" ","_")
   rescue
     ""
   end
 end
 
 # returns pure seguid from phylodb-formatted string
-def headerSeguid(header)
+def headerSeqId(header, ncbi)
   begin
-    header.gsub(">","").gsub("lcl|","").split(" ")[0]
+    if ncbi
+      header.gsub(">","").split(" ")[0]
+    else
+      header.gsub(">","").gsub("lcl|","").split(" ")[0]
+    end
   rescue
     ""
   end
@@ -162,11 +176,14 @@ def headerName(header)
   end
 end
 
-def headerFunction(header)
+def headerFunction(header, ncbi)
   begin
     seqid, ann = header.split(" ", 2)
-    ann = ann.to_s.split("\<\<")[1].split("\>\>")[0].split("||")[0]
-    ann
+    if ncbi
+      ann = ann.to_s.split(" [").first
+    else
+      ann = ann.to_s.split("\<\<")[1].split("\>\>")[0].split("||")[0]
+    end
   rescue
     ""
   end
@@ -469,37 +486,39 @@ def qsystem(cmd, project)
   system("qsub -P #{project} -cwd #{cmd}")
 end
 
-# return seqs from fastacmd formatted blast database
-def fetchSeqs(blastids, databases, functions = false, maxLength = 5000)
+# fetch seqs from fastacmd/blastdbcmd formatted blast database
+def fetchSeqs(blastids, databases, ncbi, maxLength = 5000)
   seqs = []
   functHash = Hash.new
   databases.each do |database|
-    `fastacmd -d #{database} -s "#{blastids.join(',')}" 2>/dev/null`.split(/^>/).each do |seq|
+    idstring = blastids.join(',')
+    if ncbi
+      cmd = "blastdbcmd -db #{database} -entry \"#{idstring}\""
+    else
+      cmd = "fastacmd -d #{database} -s \"#{idstring}\""
+    end
+    `#{cmd} 2>/dev/null`.split(/^>/).each do |seq|
       lines = seq.split("\n")
       if !lines.empty?
         header = lines.shift
-        seguid = headerSeguid(header)
-        sp = headerSpecies(header)
-        functHash[seguid] = headerFunction(header) if (functions)
-        out = ">" + seguid + "__" + sp + "\n"
+        seqid = headerSeqId(header, ncbi)
+        sp = headerSpecies(header, ncbi)
+        functHash[seqid] = headerFunction(header, ncbi)
+        out = ">" + seqid + "__" + sp + "\n"
         out += lines.join("\n")
         seqs.push(out) if out.length < maxLength
       end
     end
   end
-  if functions
-    [seqs, functHash]
-  else
-    seqs
-  end
+  [seqs, functHash]  
 end
 
 # runs muscle to align sequences, returns alignment as row
-def align(pep, pid, blastlines, databases, tmp, verbose)
+def align(pep, pid, blastlines, databases, tmp, ncbi, verbose)
   STDERR << "Making alignment for " << pid << "...\n" if verbose
   cleanPid = pid.tr(":\/*,","")
   blastids = blastlines.collect{|x| x.chomp.split("\t")[1]}
-  homologs, functions = fetchSeqs(blastids, databases, true)
+  homologs, functions = fetchSeqs(blastids, databases, ncbi)
   hom = tmp + "/" + cleanPid + ".hom"
   out = File.new(hom, "w")
   out.print ">"+pid+"\n" +pep.seq.tr("*","") + "\n" + homologs.join("\n")
@@ -974,4 +993,37 @@ def cleanup(dir)
     File.unlink(file)
   end
   Dir.unlink(dir)
+end
+
+# make NCBI taxonomy
+def make_ncbi_taxonomy(tarfile)
+  ranks = Hash.new
+  parents = Hash.new
+  seen = Hash.new
+  `tar xvfz #{tarfile}`
+  tax = File.new("ncbi_taxonomy.txt", "w")
+  STDERR << "Loading nodes...\n"
+  File.new("nodes.dmp").each do |line|
+    num, parent, rank = line.chomp.split("\t|\t")
+    num = num.to_i
+    parent = parent.to_i
+    ranks[num] = rank
+    parents[num] = parent
+  end
+  File.new("names.dmp").each do |line|
+    num, name, foo, type = line.chomp.split("\t|\t")
+    type = type.split("\t").first
+    num = num.to_i
+    if type == "scientific name"
+      if seen[num]
+        seen[num] = 1
+      end
+      name.gsub!("Candidatus ","")
+      tax.print [num.to_s, name, 
+                 parents[num].to_s, ranks[num]].join("\t") + "\n"
+    end
+  end
+  File.unlink("citations.dmp", "delnodes.dmp", "division.dmp", 
+              "gencode.dmp", "merged.dmp", "names.dmp", 
+              "nodes.dmp", "gc.prt", "readme.txt", "taxdump.tar.gz")
 end
